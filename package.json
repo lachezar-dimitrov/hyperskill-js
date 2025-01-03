@@ -1,23 +1,23 @@
 {
-  "name": "net-income-calculator",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/lachezar-dimitrov/net-income-calculator.git"
-  },
-  "author": "Lachezar Dimitrov",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/lachezar-dimitrov/net-income-calculator/issues"
-  },
-  "homepage": "https://github.com/lachezar-dimitrov/net-income-calculator#readme",
-  "dependencies": {
-    "sync-input": "https://github.com/hyperskill/sync-input/archive/v1.tar.gz"
-  }
+    "name": "net-income-calculator",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "start": "node index.js",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/lachezar-dimitrov/net-income-calculator.git"
+    },
+    "author": "Lachezar Dimitrov",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/lachezar-dimitrov/net-income-calculator/issues"
+    },
+    "homepage": "https://github.com/lachezar-dimitrov/net-income-calculator#readme",
+    "dependencies": {
+        "sync-input": "https://github.com/hyperskill/sync-input/archive/v1.tar.gz"
+    }
 }
