@@ -33,4 +33,6 @@ console.log(`Income: $${calculateIncome(itemPrices)}`);
 const staffExpenses = Number(input("Staff expenses:"));
 const otherExpenses = Number(input("Other expenses:"));
 
-console.log(`Net income: $${calculateNetIncome(itemPrices, staffExpenses, otherExpenses)}`);
+console.log(
+    `Net income: $${calculateNetIncome(itemPrices, staffExpenses, otherExpenses)}`,
+);
