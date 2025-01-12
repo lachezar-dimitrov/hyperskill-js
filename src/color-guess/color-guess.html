@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Color Guess Game</title>
+        <style>
+            /* General Body Styling */
+            body {
+                font-family: "Poppins", sans-serif;
+                background: linear-gradient(135deg, #ff9a9e, #fad0c4);
+                color: #333;
+                margin: 0;
+                padding: 0;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                text-align: center;
+            }
+
+            /* Game Title */
+            h1 {
+                font-size: 3rem;
+                color: #fff;
+                text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.2);
+                margin-bottom: 20px;
+            }
+
+            /* RGB Color Display */
+            #rgb-color {
+                font-size: 1.8rem;
+                font-weight: bold;
+                color: #333;
+                background: #fff;
+                padding: 10px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+                margin-bottom: 20px;
+                display: inline-block;
+            }
+
+            /* Status Message */
+            #status {
+                font-size: 1.4rem;
+                margin-bottom: 20px;
+                color: #333;
+                font-weight: bold;
+                background: #ffecb3;
+                padding: 10px 20px;
+                border-radius: 8px;
+                display: inline-block;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            }
+
+            /* Restart Button */
+            #restart {
+                padding: 12px 25px;
+                font-size: 1.2rem;
+                color: #fff;
+                background-color: #4caf50;
+                border: none;
+                border-radius: 30px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+                margin-bottom: 40px;
+            }
+
+            #restart:hover {
+                background-color: #45a049;
+                transform: scale(1.1);
+            }
+
+            /* Color Blocks Container */
+            .color-block {
+                display: block;
+                margin: 10px;
+                border-radius: 10px;
+                cursor: pointer;
+                width: 100px;
+                height: 100px;
+                transition:
+                    transform 0.3s ease,
+                    box-shadow 0.3s ease;
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            }
+
+            .color-block:hover {
+                transform: translateY(-10px);
+                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+            }
+
+            /* Footer Note */
+            footer {
+                font-size: 0.9rem;
+                color: #fff;
+                margin-top: 40px;
+                text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+            }
+        </style>
+    </head>
+    <body>
+        <!-- Game Title -->
+        <h1>Color Guess Game</h1>
+
+        <!-- RGB Color to Guess -->
+        <p id="rgb-color">RGB(255, 0, 0)</p>
+
+        <!-- Status Message -->
+        <p id="status">Start Guessing!</p>
+
+        <!-- Restart Button -->
+        <button id="restart">Restart</button>
+
+        <!-- Color Blocks -->
+        <div class="color-blocks">
+            <div
+                class="color-block"
+                style="background-color: RGB(255, 0, 0)"
+            ></div>
+            <div
+                class="color-block"
+                style="background-color: RGB(255, 255, 0)"
+            ></div>
+            <div
+                class="color-block"
+                style="background-color: RGB(0, 255, 0)"
+            ></div>
+            <div
+                class="color-block"
+                style="background-color: RGB(0, 255, 255)"
+            ></div>
+            <div
+                class="color-block"
+                style="background-color: RGB(0, 0, 255)"
+            ></div>
+            <div
+                class="color-block"
+                style="background-color: RGB(255, 0, 255)"
+            ></div>
+        </div>
+    </body>
+    <script>
+        // Function to generate a random integer between min and max
+        function getRandomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        // Function to generate a random RGB color
+        function getRandomRGB() {
+            const r = getRandomInt(0, 255);
+            const g = getRandomInt(0, 255);
+            const b = getRandomInt(0, 255);
+            return `RGB(${r}, ${g}, ${b})`;
+        }
+
+        // Main function to initialize the game
+        function initializeGame() {
+            const rgbColorElement = document.getElementById("rgb-color");
+            const colorBlocks = document.querySelectorAll(".color-block");
+            const statusText = document.getElementById("status");
+
+            // Generate a random correct RGB color
+            const correctColor = getRandomRGB();
+            rgbColorElement.textContent = correctColor.toUpperCase();
+
+            // Assign random colors to all blocks
+            const colors = [];
+            for (let i = 0; i < colorBlocks.length; i++) {
+                colors.push(getRandomRGB());
+            }
+
+            // Ensure one block matches the correct RGB color
+            const correctIndex = getRandomInt(0, colorBlocks.length - 1);
+            colors[correctIndex] = correctColor;
+
+            // Apply colors to the blocks and add click event listeners
+            colorBlocks.forEach((block, index) => {
+                block.style.backgroundColor = colors[index];
+                block.style.display = "inline-block"; // Ensure all blocks are visible
+                block.onclick = () => handleBlockClick(block, correctColor);
+            });
+
+            // Reset the status message
+            statusText.textContent = "Start Guessing!";
+        }
+
+        // Function to handle block clicks
+        function handleBlockClick(block, correctColor) {
+            const statusText = document.getElementById("status");
+
+            if (block.style.backgroundColor === correctColor.toLowerCase()) {
+                // Correct guess
+                statusText.textContent = "Correct!";
+                const colorBlocks = document.querySelectorAll(".color-block");
+                colorBlocks.forEach((b) => {
+                    b.style.backgroundColor = correctColor; // Set all blocks to the correct color
+                    b.style.display = "inline-block"; // Ensure all blocks are visible
+                });
+            } else {
+                // Incorrect guess
+                statusText.textContent = "Try Again!";
+                block.style.display = "none"; // Hide the clicked block
+            }
+        }
+
+        // Function to reset the game
+        function resetGame() {
+            initializeGame();
+        }
+
+        // Initialize the game on page load and set up the restart button
+        window.addEventListener("load", () => {
+            initializeGame();
+
+            // Add event listener for the restart button
+            const restartButton = document.getElementById("restart");
+            restartButton.addEventListener("click", resetGame);
+        });
+    </script>
+</html>
