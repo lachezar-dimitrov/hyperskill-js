@@ -5,6 +5,108 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Spin The Bottle</title>
     </head>
+    <style>
+        /* General Body Styles */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+            text-align: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        /* Heading Style */
+        h1 {
+            font-size: 2.5rem;
+            color: #4caf50;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Status Text */
+        #status {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #555;
+        }
+
+        /* Form Styles */
+        form {
+            margin-bottom: 20px;
+        }
+
+        label {
+            font-size: 1rem;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        input[type="text"] {
+            padding: 8px;
+            font-size: 1rem;
+            width: 200px;
+            border: 2px solid #ccc;
+            border-radius: 4px;
+            margin-right: 10px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            border-color: #4caf50;
+            outline: none;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 1rem;
+            color: white;
+            background-color: #4caf50;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+
+        /* Player List */
+        #players-text {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #4caf50;
+            margin-top: 20px;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 0 auto;
+            max-width: 300px;
+        }
+
+        li {
+            background-color: #e8f5e9;
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 1rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Spin Button */
+        #spin {
+            margin-top: 20px;
+        }
+    </style>
     <body>
         <!-- Game Heading -->
         <h1>Spin The Bottle</h1>
