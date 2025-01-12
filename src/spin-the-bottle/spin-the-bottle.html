@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Spin The Bottle</title>
+    </head>
+    <body>
+        <!-- Game Heading -->
+        <h1>Spin The Bottle</h1>
+
+        <!-- Status Text -->
+        <p id="status">Add players to spin the bottle.</p>
+
+        <!-- Form to Add Players -->
+        <form id="player-form">
+            <label for="player-name">Enter player name:</label>
+            <input
+                type="text"
+                id="player-name"
+                placeholder="Player name"
+                required
+            />
+            <button id="add-player">Add player</button>
+        </form>
+
+        <!-- Text for Players -->
+        <p id="players-text">Players</p>
+
+        <!-- List of Players -->
+        <ul id="players"></ul>
+
+        <!-- Spin Button -->
+        <button id="spin" disabled>Spin</button>
+
+        <script>
+            // Select necessary elements
+            const statusText = document.getElementById("status");
+            const playerForm = document.getElementById("player-form");
+            const playerNameInput = document.getElementById("player-name");
+            const playersList = document.getElementById("players");
+            const spinButton = document.getElementById("spin");
+
+            // Add event listener for form submission
+            playerForm.addEventListener("submit", (event) => {
+                event.preventDefault(); // Prevent default form submission
+
+                const playerName = playerNameInput.value.trim(); // Get player name from input
+                if (!playerName) {
+                    statusText.textContent =
+                        "Please enter a valid player name!";
+                    return;
+                }
+
+                // Check if player already exists
+                const existingPlayers = Array.from(playersList.children).map(
+                    (li) => li.textContent,
+                );
+                if (existingPlayers.includes(playerName)) {
+                    statusText.textContent = "Player already exists!";
+                    return;
+                }
+
+                // Add player to the list
+                const newPlayer = document.createElement("li");
+                newPlayer.textContent = playerName;
+                playersList.appendChild(newPlayer);
+
+                // Update status and clear input
+                statusText.textContent = "Spin the bottle!";
+                playerNameInput.value = "";
+
+                // Enable spin button if there are enough players
+                if (playersList.children.length > 1) {
+                    spinButton.disabled = false;
+                }
+            });
+
+            // Add spin button functionality
+            spinButton.addEventListener("click", () => {
+                if (playersList.children.length === 0) {
+                    statusText.textContent = "No players to spin!";
+                    return;
+                }
+
+                // Update status to spinning
+                statusText.textContent = "Spinning...";
+
+                // Add suspense with a delay
+                setTimeout(() => {
+                    const randomIndex = Math.floor(
+                        Math.random() * playersList.children.length,
+                    );
+                    const chosenPlayer =
+                        playersList.children[randomIndex].textContent;
+
+                    // Update status with chosen player
+                    statusText.textContent = `The bottle points to: ${chosenPlayer}`;
+                }, 2000);
+            });
+        </script>
+    </body>
+</html>
