@@ -13,11 +13,7 @@ class Test extends StageTest {
             this.elementExists = (id, nodeNames) => {
                 const element = document.body.querySelector(id);
                 if (!element) return true;
-                else
-                    return (
-                        nodeNames &&
-                        !nodeNames.includes(element.nodeName.toLowerCase())
-                    );
+                else return nodeNames && !nodeNames.includes(element.nodeName.toLowerCase());
             };
 
             // method to check if element with id has right text
@@ -29,9 +25,7 @@ class Test extends StageTest {
                     return element.innerText !== correctText;
                 }
 
-                return (
-                    !element.innerText || element.innerText.trim().length === 0
-                );
+                return !element.innerText || element.innerText.trim().length === 0;
             };
 
             // check if helpers still attached
@@ -48,8 +42,7 @@ class Test extends StageTest {
                 return `${theElement} "${id}" is missing in the body of the HTML document.`;
             };
             this.wrongTagMsg = (id, tag, tagAlt) => {
-                if (tagAlt)
-                    return `${theElement} "${id}" should be a/an ${tag} or ${tagAlt} tag.`;
+                if (tagAlt) return `${theElement} "${id}" should be a/an ${tag} or ${tagAlt} tag.`;
                 else return `${theElement} "${id}" should be a/an ${tag} tag.`;
             };
             this.wrongTextMsg = (id, text) => {
@@ -68,76 +61,62 @@ class Test extends StageTest {
 
             // check if correct text
             const h1Text = "Simple Stopwatch";
-            if (this.elementHasText(h1, h1Text))
-                return wrong(this.wrongTextMsg(h1, h1Text));
+            if (this.elementHasText(h1, h1Text)) return wrong(this.wrongTextMsg(h1, h1Text));
 
             // check #timer exists
             const timer = "#timer";
-            if (this.elementExists(timer))
-                return wrong(this.missingIdMsg(timer));
+            if (this.elementExists(timer)) return wrong(this.missingIdMsg(timer));
 
             // check if its p tag
-            if (this.elementExists(timer, ["p"]))
-                return wrong(this.wrongTagMsg(timer, "p"));
+            if (this.elementExists(timer, ["p"])) return wrong(this.wrongTagMsg(timer, "p"));
 
             // check if it has text
             const timerText = "00:00:00";
-            if (this.elementHasText(timer, timerText))
-                return wrong(this.wrongTextMsg(timer, timerText));
+            if (this.elementHasText(timer, timerText)) return wrong(this.wrongTextMsg(timer, timerText));
 
             // check if #start exists
             const start = "#start";
-            if (this.elementExists(start))
-                return wrong(this.missingIdMsg(start));
+            if (this.elementExists(start)) return wrong(this.missingIdMsg(start));
 
             // check if its button
-            if (this.elementExists(start, ["button"]))
-                return wrong(this.wrongTagMsg(start, "button"));
+            if (this.elementExists(start, ["button"])) return wrong(this.wrongTagMsg(start, "button"));
 
             // check if it has text
             const startText = "Start";
-            if (this.elementHasText(start, startText))
-                return wrong(this.wrongTextMsg(start, startText));
+            if (this.elementHasText(start, startText)) return wrong(this.wrongTextMsg(start, startText));
 
             // check if #stop exists
             const stop = "#stop";
             if (this.elementExists(stop)) return wrong(this.missingIdMsg(stop));
 
             // check if its button
-            if (this.elementExists(stop, ["button"]))
-                return wrong(this.wrongTagMsg(stop, "button"));
+            if (this.elementExists(stop, ["button"])) return wrong(this.wrongTagMsg(stop, "button"));
 
             // check if it has text
             const stopText = "Stop";
-            if (this.elementHasText(stop, stopText))
-                return wrong(this.wrongTextMsg(stop, stopText));
+            if (this.elementHasText(stop, stopText)) return wrong(this.wrongTextMsg(stop, stopText));
 
             // check if #reset exists
             const reset = "#reset";
-            if (this.elementExists(reset))
-                return wrong(this.missingIdMsg(reset));
+            if (this.elementExists(reset)) return wrong(this.missingIdMsg(reset));
 
             // check if its button
-            if (this.elementExists(reset, ["button"]))
-                return wrong(this.wrongTagMsg(reset, "button"));
+            if (this.elementExists(reset, ["button"])) return wrong(this.wrongTagMsg(reset, "button"));
 
             // check if it has text
             const resetText = "Reset";
-            if (this.elementHasText(reset, resetText))
-                return wrong(this.wrongTextMsg(reset, resetText));
+            if (this.elementHasText(reset, resetText)) return wrong(this.wrongTextMsg(reset, resetText));
 
             // check if #lap exists
             const lap = "#lap";
             if (this.elementExists(lap)) return wrong(this.missingIdMsg(lap));
 
             // check if its button
-            if (this.elementExists(lap, ["button"]))
-                return wrong(this.wrongTagMsg(lap, "button"));
+            if (this.elementExists(lap, ["button"])) return wrong(this.wrongTagMsg(lap, "button"));
 
             // check if it has text
             const lapText = "Lap";
-            if (this.elementHasText(lap, lapText))
-                return wrong(this.wrongTextMsg(lap, lapText));
+            if (this.elementHasText(lap, lapText)) return wrong(this.wrongTextMsg(lap, lapText));
 
             return correct();
         }),
@@ -159,8 +138,7 @@ class Test extends StageTest {
 
             const timer = document.body.querySelector("#timer");
             const timerText = timer.innerText;
-            if (timerText === "00:00:00")
-                return wrong("Start button does not work.");
+            if (timerText === "00:00:00") return wrong("Start button does not work.");
 
             return correct();
         }),
@@ -182,15 +160,11 @@ class Test extends StageTest {
 
             const timer = document.body.querySelector("#timer");
             const timerText = timer.innerText;
-            if (timerText === "00:00:00")
-                return wrong("Stop button does not work.");
+            if (timerText === "00:00:00") return wrong("Stop button does not work.");
 
             try {
                 let [min, sec, ms] = timerText.split(":");
-                if (sec[1] < 2)
-                    return wrong(
-                        "Stop button does not work. Timer didn't stop after 2 seconds.",
-                    );
+                if (sec[1] < 2) return wrong("Stop button does not work. Timer didn't stop after 2 seconds.");
             } catch (e) {
                 return wrong(
                     "There was an error while parsing the timer text. Make sure it's in the format '00:00:00'.",
@@ -222,8 +196,7 @@ class Test extends StageTest {
             const timerTextAfter = timer.innerText;
             let secAfter = Number(timerTextAfter.split(":")[1][1]);
 
-            let message =
-                "Timer should continue after clicking start button again.";
+            let message = "Timer should continue after clicking start button again.";
 
             if (timerTextAfter === timerTextBefore) return wrong(message);
 
@@ -240,8 +213,7 @@ class Test extends StageTest {
             if (!laps) return wrong(this.missingIdMsg("#laps"));
 
             // check if it is ol or ul
-            if (this.elementExists("#laps", ["ol", "ul"]))
-                return wrong(this.wrongTagMsg("#laps", "ol", "ul"));
+            if (this.elementExists("#laps", ["ol", "ul"])) return wrong(this.wrongTagMsg("#laps", "ol", "ul"));
 
             // check if #lap button works
             const lap = document.body.querySelector("#lap");
@@ -263,8 +235,7 @@ class Test extends StageTest {
             if (!li) return wrong(this.missingIdMsg("#laps li"));
 
             // check if it has text
-            if (this.elementHasText("#laps li", timerText))
-                return wrong(this.wrongTextMsg("#laps li", timerText));
+            if (this.elementHasText("#laps li", timerText)) return wrong(this.wrongTextMsg("#laps li", timerText));
 
             return correct();
         }),
@@ -287,14 +258,10 @@ class Test extends StageTest {
             const timer = document.body.querySelector("#timer");
             const timerText = timer.innerText;
 
-            if (timerText !== "00:00:00")
-                return wrong("Reset button does not work. Timer is not reset.");
+            if (timerText !== "00:00:00") return wrong("Reset button does not work. Timer is not reset.");
 
             const laps = document.body.querySelector("#laps");
-            if (laps.children.length !== 0)
-                return wrong(
-                    "Reset button does not work. Laps are not cleared.",
-                );
+            if (laps.children.length !== 0) return wrong("Reset button does not work. Laps are not cleared.");
 
             return correct();
         }),

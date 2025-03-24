@@ -14,11 +14,7 @@ class Test extends StageTest {
             this.elementExists = (id, nodeNames) => {
                 const element = document.body.querySelector(id);
                 if (!element) return true;
-                else
-                    return (
-                        nodeNames &&
-                        !nodeNames.includes(element.nodeName.toLowerCase())
-                    );
+                else return nodeNames && !nodeNames.includes(element.nodeName.toLowerCase());
             };
 
             // method to check if element with id has right text
@@ -30,9 +26,7 @@ class Test extends StageTest {
                     return !element.innerText.includes(correctText);
                 }
 
-                return (
-                    !element.innerText || element.innerText.trim().length === 0
-                );
+                return !element.innerText || element.innerText.trim().length === 0;
             };
 
             // method to check if element with id has right attribute
@@ -65,8 +59,7 @@ class Test extends StageTest {
                 return `${theElement} "${id}" is missing in the body of the HTML document.`;
             };
             this.wrongTagMsg = (id, tag, tagAlt) => {
-                if (tagAlt)
-                    return `${theElement} "${id}" should be a/an ${tag} or ${tagAlt} tag.`;
+                if (tagAlt) return `${theElement} "${id}" should be a/an ${tag} or ${tagAlt} tag.`;
                 else return `${theElement} "${id}" should be a/an ${tag} tag.`;
             };
             this.wrongTextMsg = (id, text) => {
@@ -91,17 +84,14 @@ class Test extends StageTest {
 
             // check if correct text
             const h1Text = "Spin The Bottle";
-            if (this.elementHasText(h1, h1Text))
-                return wrong(this.wrongTextMsg(h1, h1Text));
+            if (this.elementHasText(h1, h1Text)) return wrong(this.wrongTextMsg(h1, h1Text));
 
             // check #players-text exists
             const playersText = "#players-text";
-            if (this.elementExists(playersText))
-                return wrong(this.missingIdMsg(playersText));
+            if (this.elementExists(playersText)) return wrong(this.missingIdMsg(playersText));
 
             // check if its p tag
-            if (this.elementExists(playersText, ["p"]))
-                return wrong(this.wrongTagMsg(playersText, "p"));
+            if (this.elementExists(playersText, ["p"])) return wrong(this.wrongTagMsg(playersText, "p"));
 
             // check if it has text
             const playersTextValue = "Players";
@@ -110,12 +100,10 @@ class Test extends StageTest {
 
             // check if #players exists
             const players = "#players";
-            if (this.elementExists(players))
-                return wrong(this.missingIdMsg(players));
+            if (this.elementExists(players)) return wrong(this.missingIdMsg(players));
 
             // check if its ul or ol tag
-            if (this.elementExists(players, ["ul", "ol"]))
-                return wrong(this.wrongTagMsg(players, "ul", "ol"));
+            if (this.elementExists(players, ["ul", "ol"])) return wrong(this.wrongTagMsg(players, "ul", "ol"));
 
             /*  // check if #players has 6 li
           const playersList = document.body.querySelector(players);
@@ -129,30 +117,25 @@ class Test extends StageTest {
 
             // check if #status exists
             const status = "#status";
-            if (this.elementExists(status))
-                return wrong(this.missingIdMsg(status));
+            if (this.elementExists(status)) return wrong(this.missingIdMsg(status));
 
             // check if its p tag
-            if (this.elementExists(status, ["p"]))
-                return wrong(this.wrongTagMsg(status, "p"));
+            if (this.elementExists(status, ["p"])) return wrong(this.wrongTagMsg(status, "p"));
 
             // check if it has text
             const statusText = "Add players to spin the bottle.";
-            if (this.elementHasText(status, statusText))
-                return wrong(this.wrongTextMsg(status, statusText));
+            if (this.elementHasText(status, statusText)) return wrong(this.wrongTextMsg(status, statusText));
 
             // check if #spin exists
             const spin = "#spin";
             if (this.elementExists(spin)) return wrong(this.missingIdMsg(spin));
 
             // check if its button
-            if (this.elementExists(spin, ["button"]))
-                return wrong(this.wrongTagMsg(spin, "button"));
+            if (this.elementExists(spin, ["button"])) return wrong(this.wrongTagMsg(spin, "button"));
 
             // check if it has text
             const spinText = "Spin";
-            if (this.elementHasText(spin, spinText))
-                return wrong(this.wrongTextMsg(spin, spinText));
+            if (this.elementHasText(spin, spinText)) return wrong(this.wrongTextMsg(spin, spinText));
 
             return correct();
         }),
@@ -161,54 +144,32 @@ class Test extends StageTest {
             // STAGE3 FORM TAGS
 
             // check if form exists
-            if (this.elementExists("form"))
-                return wrong(this.missingIdMsg("form"));
+            if (this.elementExists("form")) return wrong(this.missingIdMsg("form"));
 
             // check label exists in form
-            if (this.elementExists("form label"))
-                return wrong(this.missingIdMsg("form label"));
+            if (this.elementExists("form label")) return wrong(this.missingIdMsg("form label"));
 
             // check label has correct for attr
             if (this.elementHasAttribute("form label", "for", "player-name"))
-                return wrong(
-                    this.wrongAttributeMsg("form label", "for", "player-name"),
-                );
+                return wrong(this.wrongAttributeMsg("form label", "for", "player-name"));
 
             // check label has correct text
             if (this.elementHasText("form label", "Enter player name"))
-                return wrong(
-                    this.wrongTextMsg("form label", "Enter player name"),
-                );
+                return wrong(this.wrongTextMsg("form label", "Enter player name"));
 
             // check input exists in form
-            if (this.elementExists("form #player-name"))
-                return wrong(this.missingIdMsg("form #player-name"));
+            if (this.elementExists("form #player-name")) return wrong(this.missingIdMsg("form #player-name"));
 
             // check input has correct placeholder attr
-            if (
-                this.elementHasAttribute(
-                    "form #player-name",
-                    "placeholder",
-                    "Player name",
-                )
-            )
-                return wrong(
-                    this.wrongAttributeMsg(
-                        "form label",
-                        "placeholder",
-                        "Player name",
-                    ),
-                );
+            if (this.elementHasAttribute("form #player-name", "placeholder", "Player name"))
+                return wrong(this.wrongAttributeMsg("form label", "placeholder", "Player name"));
 
             // check #add-player button exists in form
-            if (this.elementExists("form #add-player"))
-                return wrong(this.missingIdMsg("form #add-player"));
+            if (this.elementExists("form #add-player")) return wrong(this.missingIdMsg("form #add-player"));
 
             // check #add-player button has correct text
             if (this.elementHasText("form #add-player", "Add player"))
-                return wrong(
-                    this.wrongTextMsg("form #add-player", "Add player"),
-                );
+                return wrong(this.wrongTextMsg("form #add-player", "Add player"));
 
             return correct();
         }),
@@ -234,26 +195,16 @@ class Test extends StageTest {
             await new Promise((resolve) => setTimeout(resolve, 1000));
 
             // check if player is added
-            const players = Array.from(
-                document.querySelectorAll("#players li"),
-            );
-            if (
-                !players.some((player) =>
-                    player.textContent.includes(playerName),
-                )
-            )
-                return wrong(
-                    "The player should be added to the list of players.",
-                );
+            const players = Array.from(document.querySelectorAll("#players li"));
+            if (!players.some((player) => player.textContent.includes(playerName)))
+                return wrong("The player should be added to the list of players.");
 
             // check if status text is updated
             const status = document.body.querySelector("#status");
             if (!status) return wrong("The status element is missing.");
 
             if (this.elementHasText("#status", "Spin the bottle!"))
-                return wrong(
-                    "The status text should change after adding a player.",
-                );
+                return wrong("The status text should change after adding a player.");
 
             return correct();
         }),
@@ -265,10 +216,7 @@ class Test extends StageTest {
             const input = document.body.querySelector("#player-name");
             if (!input) return wrong("The input element is missing.");
 
-            if (input.value !== "")
-                return wrong(
-                    "The input element should clear after adding a player.",
-                );
+            if (input.value !== "") return wrong("The input element should clear after adding a player.");
 
             // add player
             await this.addPlayer("Jane");
@@ -279,22 +227,15 @@ class Test extends StageTest {
             await new Promise((resolve) => setTimeout(resolve, 1000));
 
             let players = Array.from(document.querySelectorAll("#players li"));
-            if (
-                players.filter((player) => player.textContent.includes("Jane"))
-                    .length > 1
-            )
-                return wrong(
-                    "The same player should not be added more than once.",
-                );
+            if (players.filter((player) => player.textContent.includes("Jane")).length > 1)
+                return wrong("The same player should not be added more than once.");
 
             // status text should say "Player already exists"
             let status = document.body.querySelector("#status");
             if (!status) return wrong("The status element is missing.");
 
             if (this.elementHasText("#status", "Player already exists"))
-                return wrong(
-                    'The status text should display "Player already exists!" if the player already exists.',
-                );
+                return wrong('The status text should display "Player already exists!" if the player already exists.');
 
             await this.addPlayer("Alice");
             await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -309,10 +250,7 @@ class Test extends StageTest {
 
             let text = "Spinning...";
             if (this.elementHasText("#status", text))
-                return wrong(
-                    this.wrongTextMsg("#status", text) +
-                        "for 2 seconds before selecting a player.",
-                );
+                return wrong(this.wrongTextMsg("#status", text) + "for 2 seconds before selecting a player.");
 
             await new Promise((resolve) => setTimeout(resolve, 3000));
 
@@ -320,14 +258,8 @@ class Test extends StageTest {
             let statusList = [statusText];
             players = Array.from(document.querySelectorAll("#players li"));
 
-            if (
-                !players.some((player) =>
-                    statusText.includes(player.textContent),
-                )
-            )
-                return wrong(
-                    'The element with selector of "#status" should display the selected player.',
-                );
+            if (!players.some((player) => statusText.includes(player.textContent)))
+                return wrong('The element with selector of "#status" should display the selected player.');
 
             // check if its random
             await spin.click();
@@ -338,10 +270,7 @@ class Test extends StageTest {
             await new Promise((resolve) => setTimeout(resolve, 3000));
             statusList.push(status.innerText);
 
-            if (
-                statusList[0] === statusList[1] &&
-                statusList[1] === statusList[2]
-            )
+            if (statusList[0] === statusList[1] && statusList[1] === statusList[2])
                 return wrong("The selected player should be random.");
 
             await new Promise((resolve) => setTimeout(resolve, 3000));

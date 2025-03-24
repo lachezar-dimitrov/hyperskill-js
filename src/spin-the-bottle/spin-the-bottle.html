@@ -117,12 +117,7 @@
         <!-- Form to Add Players -->
         <form id="player-form">
             <label for="player-name">Enter player name:</label>
-            <input
-                type="text"
-                id="player-name"
-                placeholder="Player name"
-                required
-            />
+            <input type="text" id="player-name" placeholder="Player name" required />
             <button id="add-player">Add player</button>
         </form>
 
@@ -149,15 +144,12 @@
 
                 const playerName = playerNameInput.value.trim(); // Get player name from input
                 if (!playerName) {
-                    statusText.textContent =
-                        "Please enter a valid player name!";
+                    statusText.textContent = "Please enter a valid player name!";
                     return;
                 }
 
                 // Check if player already exists
-                const existingPlayers = Array.from(playersList.children).map(
-                    (li) => li.textContent,
-                );
+                const existingPlayers = Array.from(playersList.children).map((li) => li.textContent);
                 if (existingPlayers.includes(playerName)) {
                     statusText.textContent = "Player already exists!";
                     return;
@@ -190,11 +182,8 @@
 
                 // Add suspense with a delay
                 setTimeout(() => {
-                    const randomIndex = Math.floor(
-                        Math.random() * playersList.children.length,
-                    );
-                    const chosenPlayer =
-                        playersList.children[randomIndex].textContent;
+                    const randomIndex = Math.floor(Math.random() * playersList.children.length);
+                    const chosenPlayer = playersList.children[randomIndex].textContent;
 
                     // Update status with chosen player
                     statusText.textContent = `The bottle points to: ${chosenPlayer}`;
