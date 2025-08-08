@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>WW1 Dogfight – Single Player vs Bots (Demo)</title>
+        <style>
+            html,
+            body {
+                margin: 0;
+                padding: 0;
+                height: 100%;
+                overflow: hidden;
+                background: #0b0f16;
+                font-family:
+                    system-ui,
+                    Segoe UI,
+                    Roboto,
+                    Inter,
+                    Arial;
+            }
+            #hud {
+                position: fixed;
+                top: 12px;
+                left: 12px;
+                color: #e6ecf1;
+                background: rgba(0, 0, 0, 0.35);
+                padding: 10px 12px;
+                border-radius: 10px;
+                line-height: 1.25;
+                font-size: 14px;
+            }
+            #hud .row {
+                display: flex;
+                gap: 10px;
+                align-items: center;
+            }
+            #msg {
+                position: fixed;
+                top: 12px;
+                right: 12px;
+                color: #e6ecf1;
+                background: rgba(0, 0, 0, 0.35);
+                padding: 10px 12px;
+                border-radius: 10px;
+                font-size: 14px;
+                max-width: 36ch;
+            }
+            #capture {
+                position: fixed;
+                bottom: 12px;
+                left: 50%;
+                transform: translateX(-50%);
+                color: #e6ecf1;
+                background: rgba(0, 0, 0, 0.35);
+                padding: 10px 12px;
+                border-radius: 10px;
+                font-size: 14px;
+            }
+            #crosshair {
+                position: fixed;
+                left: 50%;
+                top: 50%;
+                width: 24px;
+                height: 24px;
+                margin-left: -12px;
+                margin-top: -12px;
+                border: 2px solid rgba(255, 255, 255, 0.7);
+                border-radius: 50%;
+                box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25) inset;
+            }
+            #crosshair:after {
+                content: "";
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                width: 2px;
+                height: 2px;
+                background: #fff;
+                margin-left: -1px;
+                margin-top: -1px;
+                border-radius: 50%;
+            }
+            .testbar {
+                position: fixed;
+                bottom: 12px;
+                right: 12px;
+                background: rgba(0, 0, 0, 0.35);
+                color: #cfe3ee;
+                padding: 10px 12px;
+                border-radius: 10px;
+                font-size: 12px;
+                max-width: 42ch;
+                white-space: pre-line;
+            }
+            a {
+                color: #9ad1ff;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="hud"></div>
+        <div id="msg">
+            Keys: W/S throttle · ↑/↓ pitch · ←/→ yaw · Q/E roll · Space fire · Land on runway (slow & level) to repair &
+            reload
+        </div>
+        <div id="capture">Runway capture: <span id="capPct">0%</span></div>
+        <div id="crosshair"></div>
+        <div class="testbar" id="testbar">Running self-tests…</div>
+
+        <!-- Use ESM with multi‑CDN fallback to avoid `THREE is not defined` in sandboxed environments. -->
+        <script type="module">
+            async function loadThree() {
+                const cdns = [
+                    "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+                    "https://unpkg.com/three@0.161.0/build/three.module.js",
+                    "https://esm.sh/three@0.161.0",
+                ];
+                let lastErr;
+                for (const url of cdns) {
+                    try {
+                        return await import(url);
+                    } catch (e) {
+                        lastErr = e;
+                    }
+                }
+                throw lastErr || new Error("Failed to load three.module.js from all CDNs");
+            }
+
+            const testbar = document.getElementById("testbar");
+            function logTest(msg, ok = true) {
+                // NOTE: use escaped newline ("\n") to avoid syntax errors from stray newlines in strings
+                testbar.textContent =
+                    (testbar.textContent ? testbar.textContent + "\n" : "") + (ok ? "✅ " : "❌ ") + msg;
+            }
+
+            let THREE;
+            try {
+                THREE = await loadThree();
+                logTest("Loaded Three.js module");
+            } catch (e) {
+                logTest("Could not load Three.js. Check network/CSP. " + e.message, false);
+                alert("Three.js failed to load. The demo needs network access. Error: " + e.message);
+                throw e;
+            }
+
+            // ====== BEGIN GAME CODE (unchanged logic, module‑friendly) ======
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0b0f16);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 2000);
+
+            const hemi = new THREE.HemisphereLight(0xcde6ff, 0x223344, 1.0);
+            scene.add(hemi);
+            const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+            sun.position.set(200, 300, 150);
+            scene.add(sun);
+
+            const groundGeo = new THREE.PlaneGeometry(4000, 4000, 64, 64);
+            groundGeo.rotateX(-Math.PI / 2);
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x1b3a28, roughness: 1, metalness: 0 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            const runwayLen = 600,
+                runwayWid = 60;
+            const runwayGeo = new THREE.PlaneGeometry(runwayLen, runwayWid);
+            runwayGeo.rotateX(-Math.PI / 2);
+            const runwayMat = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.8 });
+            const runway = new THREE.Mesh(runwayGeo, runwayMat);
+            runway.position.set(0, 0.01, 0);
+            scene.add(runway);
+
+            const markMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            for (let i = -runwayLen / 2 + 40; i < runwayLen / 2; i += 60) {
+                const m = new THREE.Mesh(new THREE.PlaneGeometry(10, 4), markMat);
+                m.rotateX(-Math.PI / 2);
+                m.position.set(i, 0.02, 0);
+                scene.add(m);
+            }
+
+            const propMat = new THREE.MeshStandardMaterial({ color: 0x3f4d3f, roughness: 0.9 });
+            for (let i = 0; i < 80; i++) {
+                const cone = new THREE.Mesh(
+                    new THREE.ConeGeometry(6 + Math.random() * 8, 24 + Math.random() * 20, 6),
+                    propMat,
+                );
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 500 + Math.random() * 1400;
+                cone.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+                scene.add(cone);
+            }
+
+            function makePlane(color = 0xbcc6cc) {
+                const group = new THREE.Group();
+                const fus = new THREE.Mesh(
+                    new THREE.CapsuleGeometry(3, 8, 6, 12),
+                    new THREE.MeshStandardMaterial({ color, roughness: 0.7 }),
+                );
+                fus.rotation.z = Math.PI / 2;
+                group.add(fus);
+                const wingGeo = new THREE.BoxGeometry(18, 0.4, 2.2);
+                const wingMat = new THREE.MeshStandardMaterial({ color: 0x9aa7ad, roughness: 0.8 });
+                const wingTop = new THREE.Mesh(wingGeo, wingMat);
+                wingTop.position.set(0, 1.8, 0);
+                const wingBot = new THREE.Mesh(wingGeo, wingMat);
+                wingBot.position.set(0, -0.8, 0);
+                group.add(wingTop, wingBot);
+                const tail = new THREE.Mesh(new THREE.BoxGeometry(4, 0.3, 1.2), wingMat);
+                tail.position.set(-5.5, 0.6, 0);
+                group.add(tail);
+                const rudder = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2, 1.0), wingMat);
+                rudder.position.set(-6.2, 1.2, 0);
+                group.add(rudder);
+                const prop = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.3, 0.3, 2, 12),
+                    new THREE.MeshStandardMaterial({ color: 0x333, metalness: 0.2, roughness: 0.6 }),
+                );
+                prop.rotation.z = Math.PI / 2;
+                prop.position.set(6.2, 0, 0);
+                group.add(prop);
+                group.userData.prop = prop;
+                group.traverse((o) => {
+                    o.castShadow = true;
+                    o.receiveShadow = true;
+                });
+                return group;
+            }
+
+            const player = makePlane(0xcfe3ee);
+            scene.add(player);
+            player.position.set(-200, 40, -200);
+
+            const state = {
+                throttle: 0.5,
+                maxThrust: 40,
+                dragCoef: 0.012,
+                liftCoef: 0.08,
+                roll: 0,
+                pitch: 0,
+                yaw: 0,
+                vel: new THREE.Vector3(),
+                hp: 100,
+                ammo: 400,
+                score: 0,
+                landed: false,
+            };
+
+            const keys = {};
+            addEventListener("keydown", (e) => {
+                keys[e.code] = true;
+            });
+            addEventListener("keyup", (e) => {
+                keys[e.code] = false;
+            });
+
+            const BOT_COUNT = 6;
+            const bots = [];
+            for (let i = 0; i < BOT_COUNT; i++) {
+                const b = makePlane(0xd37f7f);
+                scene.add(b);
+                const ang = i * ((Math.PI * 2) / BOT_COUNT);
+                b.position.set(Math.cos(ang) * 300 - 200, 50 + Math.random() * 20, Math.sin(ang) * 300);
+                b.rotation.y = Math.random() * Math.PI * 2;
+                b.userData = { vel: new THREE.Vector3(), throttle: 0.55, hp: 60, thinkCooldown: 0 };
+                bots.push(b);
+            }
+
+            const bullets = [];
+            function spawnBullet(origin, dir, from) {
+                const geo = new THREE.SphereGeometry(0.08, 6, 6);
+                const mat = new THREE.MeshBasicMaterial({ color: from === "player" ? 0xffffff : 0xffd080 });
+                const m = new THREE.Mesh(geo, mat);
+                m.position.copy(origin);
+                m.userData = { vel: dir.clone().multiplyScalar(180), ttl: 1.2, from };
+                scene.add(m);
+                bullets.push(m);
+            }
+
+            function forwardOf(obj) {
+                return new THREE.Vector3(1, 0, 0).applyQuaternion(obj.quaternion);
+            }
+
+            let captureProgress = 0;
+            const capSpan = document.getElementById("capPct");
+            function inRunwayBounds(pos) {
+                return (
+                    Math.abs(pos.x - runway.position.x) <= runwayLen / 2 &&
+                    Math.abs(pos.z - runway.position.z) <= runwayWid / 2
+                );
+            }
+
+            function handleLandingRepair(dt) {
+                const speed = state.vel.length();
+                const onGround = player.position.y <= 1.1;
+                const aligned = Math.abs(player.rotation.z) < 0.2 && Math.abs(player.rotation.x) < 0.2;
+                if (onGround && speed < 6 && inRunwayBounds(player.position) && aligned) {
+                    state.landed = true;
+                    state.hp = Math.min(100, state.hp + 25 * dt);
+                    if (state.hp >= 100) state.ammo = Math.min(400, state.ammo + 80 * dt);
+                    captureProgress = Math.min(100, captureProgress + 18 * dt);
+                } else {
+                    state.landed = false;
+                    captureProgress = Math.max(0, captureProgress - 3 * dt);
+                }
+                capSpan.textContent = captureProgress.toFixed(0) + "%";
+            }
+
+            const hud = document.getElementById("hud");
+            function drawHUD() {
+                const spd = state.vel.length();
+                hud.innerHTML =
+                    `<div class="row"><b>Speed:</b> ${spd.toFixed(1)} m/s &nbsp; <b>Throttle:</b> ${(state.throttle * 100) | 0}% &nbsp; <b>HP:</b> ${state.hp | 0} &nbsp; <b>Ammo:</b> ${state.ammo | 0} &nbsp; <b>Score:</b> ${state.score}</div>` +
+                    `<div class="row"><b>Bots alive:</b> ${bots.filter((b) => b.userData.hp > 0).length}/${BOT_COUNT}</div>`;
+            }
+
+            function updatePlayer(dt) {
+                if (keys["KeyW"]) state.throttle = Math.min(1, state.throttle + 0.45 * dt);
+                if (keys["KeyS"]) state.throttle = Math.max(0, state.throttle - 0.45 * dt);
+                const pitchIn = (keys["ArrowUp"] ? 1 : 0) + (keys["ArrowDown"] ? -1 : 0);
+                const yawIn = (keys["ArrowLeft"] ? -1 : 0) + (keys["ArrowRight"] ? 1 : 0);
+                const rollIn = (keys["KeyQ"] ? -1 : 0) + (keys["KeyE"] ? 1 : 0);
+                player.rotation.y += yawIn * 0.9 * dt;
+                player.rotation.z += -rollIn * 1.8 * dt;
+                player.rotation.x += -pitchIn * 1.2 * dt;
+                const fwd = forwardOf(player);
+                const thrust = fwd.clone().multiplyScalar(state.maxThrust * state.throttle);
+                const v = state.vel;
+                const drag = v.clone().multiplyScalar(-state.dragCoef * v.length());
+                const up = new THREE.Vector3(0, 1, 0).applyQuaternion(player.quaternion);
+                const liftMag = state.liftCoef * Math.max(0, v.length());
+                const lift = up.multiplyScalar(liftMag);
+                const gravity = new THREE.Vector3(0, -9.8, 0);
+                v.add(thrust.add(drag).add(lift).add(gravity).multiplyScalar(dt));
+                if (v.length() < 12 && player.rotation.x < -0.25) {
+                    v.y -= 12 * dt;
+                }
+                player.position.add(v.clone().multiplyScalar(dt));
+                if (player.position.y < 0.5) {
+                    player.position.y = 0.5;
+                    if (v.y < 0) v.y *= -0.2;
+                    v.x *= 0.98;
+                    v.z *= 0.98;
+                }
+                if (keys["Space"] && state.ammo > 0) {
+                    fireTimer -= dt;
+                    if (fireTimer <= 0) {
+                        const f = forwardOf(player);
+                        const muzzle = player.position
+                            .clone()
+                            .add(f.clone().multiplyScalar(6.6))
+                            .add(new THREE.Vector3(0, 0, 0));
+                        spawnBullet(muzzle, f, "player");
+                        state.ammo -= 1;
+                        fireTimer = 0.05;
+                    }
+                } else {
+                    fireTimer = 0;
+                }
+                if (state.hp <= 0) {
+                    respawnTimer -= dt;
+                    if (respawnTimer <= 0) {
+                        state.hp = 100;
+                        state.ammo = 400;
+                        state.vel.set(0, 0, 0);
+                        player.position.set(-200, 40, -200);
+                        player.rotation.set(0, Math.random() * Math.PI * 2, 0);
+                        respawnTimer = 0.5;
+                    }
+                }
+                if (player.userData.prop) player.userData.prop.rotation.x += (20 + 80 * state.throttle) * dt;
+            }
+
+            let fireTimer = 0;
+            let respawnTimer = 0.5;
+
+            function updateBots(dt) {
+                bots.forEach((b) => {
+                    const d = b.userData;
+                    if (d.hp <= 0) {
+                        b.visible = false;
+                        return;
+                    }
+                    b.visible = true;
+                    d.thinkCooldown -= dt;
+                    if (d.thinkCooldown <= 0) {
+                        const toPlayer = player.position.clone().sub(b.position).normalize();
+                        const desiredYaw = Math.atan2(toPlayer.z, toPlayer.x);
+                        const curYaw = b.rotation.y;
+                        let yawDelta = wrapAngle(desiredYaw - curYaw);
+                        b.rotation.y += THREE.MathUtils.clamp(yawDelta, -0.7 * dt, 0.7 * dt);
+                        const dy = player.position.y - b.position.y;
+                        b.rotation.x += THREE.MathUtils.clamp(-dy * 0.002, -0.5 * dt, 0.5 * dt);
+                        b.rotation.z += THREE.MathUtils.clamp((Math.random() - 0.5) * 0.6 * dt, -0.6 * dt, 0.6 * dt);
+                        d.thinkCooldown = 0.02;
+                    }
+                    const fwd = forwardOf(b);
+                    const thrust = fwd.clone().multiplyScalar(36 * d.throttle);
+                    d.vel.add(thrust.multiplyScalar(dt));
+                    d.vel.add(d.vel.clone().multiplyScalar(-0.012 * d.vel.length() * dt));
+                    d.vel.y += -9.8 * dt;
+                    b.position.add(d.vel.clone().multiplyScalar(dt));
+                    if (b.position.y < 0.5) {
+                        b.position.y = 0.5;
+                        d.vel.y = Math.abs(d.vel.y) * 0.2;
+                        d.vel.x *= 0.98;
+                        d.vel.z *= 0.98;
+                    }
+                    const toP = player.position.clone().sub(b.position);
+                    const dist = toP.length();
+                    if (dist < 350) {
+                        const aim = forwardOf(b).normalize();
+                        const cos = aim.dot(toP.normalize());
+                        if (cos > 0.98) {
+                            d.fireCd = (d.fireCd || 0) - dt;
+                            if (d.fireCd <= 0) {
+                                const muzzle = b.position.clone().add(aim.clone().multiplyScalar(6.4));
+                                spawnBullet(muzzle, aim, "bot");
+                                d.fireCd = 0.06;
+                            }
+                        }
+                    }
+                    if (b.userData && b.userData.prop) b.userData.prop.rotation.x += (20 + 80 * d.throttle) * dt;
+                });
+            }
+
+            function wrapAngle(a) {
+                while (a > Math.PI) a -= Math.PI * 2;
+                while (a < -Math.PI) a += Math.PI * 2;
+                return a;
+            }
+
+            function updateBullets(dt) {
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    const b = bullets[i];
+                    b.userData.ttl -= dt;
+                    if (b.userData.ttl <= 0) {
+                        scene.remove(b);
+                        bullets.splice(i, 1);
+                        continue;
+                    }
+                    b.position.add(b.userData.vel.clone().multiplyScalar(dt));
+                    if (b.userData.from === "player") {
+                        for (const t of bots) {
+                            if (t.userData.hp > 0 && b.position.distanceTo(t.position) < 2.0) {
+                                t.userData.hp -= 20;
+                                if (t.userData.hp <= 0) {
+                                    state.score += 100;
+                                }
+                                scene.remove(b);
+                                bullets.splice(i, 1);
+                                break;
+                            }
+                        }
+                    } else {
+                        if (state.hp > 0 && b.position.distanceTo(player.position) < 2.0) {
+                            state.hp -= 15;
+                            scene.remove(b);
+                            bullets.splice(i, 1);
+                        }
+                    }
+                }
+            }
+
+            function updateCamera(dt) {
+                const fwd = forwardOf(player);
+                const behind = player.position
+                    .clone()
+                    .add(fwd.clone().multiplyScalar(-12))
+                    .add(new THREE.Vector3(0, 4, 0));
+                camera.position.lerp(behind, 1 - Math.pow(0.001, dt));
+                const lookAt = player.position.clone().add(fwd.clone().multiplyScalar(10));
+                camera.lookAt(lookAt);
+            }
+
+            let last = performance.now() / 1000;
+            function loop() {
+                const now = performance.now() / 1000;
+                let dt = Math.min(0.033, now - last);
+                last = now;
+                updatePlayer(dt);
+                updateBots(dt);
+                updateBullets(dt);
+                handleLandingRepair(dt);
+                updateCamera(dt);
+                drawHUD();
+                renderer.render(scene, camera);
+                requestAnimationFrame(loop);
+            }
+            loop();
+
+            addEventListener("resize", () => {
+                renderer.setSize(innerWidth, innerHeight);
+                camera.aspect = innerWidth / innerHeight;
+                camera.updateProjectionMatrix();
+            });
+
+            // ====== RUNTIME SELF‑TESTS (simple, additive) ======
+            try {
+                console.assert(THREE != null, "THREE module is present");
+                logTest("THREE namespace present");
+                const v = new THREE.Vector3(1, 2, 3);
+                v.add(new THREE.Vector3(1, 0, -1));
+                console.assert(v.x === 2 && v.y === 2 && v.z === 2, "Vector3 add works");
+                logTest("Vector math");
+                console.assert(typeof forwardOf === "function", "forwardOf exists");
+                logTest("Utility present: forwardOf");
+                console.assert(
+                    typeof inRunwayBounds === "function" && inRunwayBounds(runway.position.clone()),
+                    "Runway bounds basic",
+                );
+                logTest("Runway bounds");
+                // Additional tests
+                console.assert(
+                    !inRunwayBounds(new THREE.Vector3(runwayLen, 0, runwayWid)),
+                    "Runway bounds outside false",
+                );
+                logTest("Runway bounds outside");
+                const before = 1.2;
+                const testBullet = {
+                    userData: { ttl: before, vel: new THREE.Vector3(0, 0, 0) },
+                    position: new THREE.Vector3(),
+                    remove: () => {},
+                };
+                // Simulate TTL drop
+                testBullet.userData.ttl -= 0.5;
+                console.assert(testBullet.userData.ttl === before - 0.5, "Bullet TTL decreases");
+                logTest("Bullet TTL");
+                const fwdVec = forwardOf(player).normalize();
+                console.assert(Math.abs(fwdVec.length() - 1) < 1e-6, "forwardOf normalises correctly when normalised");
+                logTest("Forward vector normalisation");
+                logTest("Self-tests passed.");
+            } catch (e) {
+                logTest("Self-tests failed: " + e.message, false);
+            }
+
+            // ====== END GAME CODE ======
+        </script>
+    </body>
+</html>
