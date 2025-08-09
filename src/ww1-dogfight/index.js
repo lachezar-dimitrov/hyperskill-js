@@ -137,27 +137,88 @@ function wrapAngle(a) {
 // =========================
 // Factories
 // =========================
+// Krenvirsh
+// function makePlane(color = 0xbcc6cc) {
+//     const group = new THREE.Group();
+//     const fus = new THREE.Mesh(
+//         new THREE.CapsuleGeometry(3, 8, 6, 12),
+//         new THREE.MeshStandardMaterial({ color, roughness: 0.7 }),
+//     );
+//     fus.rotation.z = Math.PI / 2;
+//     group.add(fus);
+//     const wingGeo = new THREE.BoxGeometry(18, 0.4, 2.2);
+//     const wingMat = new THREE.MeshStandardMaterial({ color: 0x9aa7ad, roughness: 0.8 });
+//     const wingTop = new THREE.Mesh(wingGeo, wingMat);
+//     wingTop.position.set(0, 1.8, 0);
+//     const wingBot = new THREE.Mesh(wingGeo, wingMat);
+//     wingBot.position.set(0, -0.8, 0);
+//     group.add(wingTop, wingBot);
+//     const tail = new THREE.Mesh(new THREE.BoxGeometry(4, 0.3, 1.2), wingMat);
+//     tail.position.set(-5.5, 0.6, 0);
+//     group.add(tail);
+//     const rudder = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2, 1.0), wingMat);
+//     rudder.position.set(-6.2, 1.2, 0);
+//     group.add(rudder);
+//     const prop = new THREE.Mesh(
+//         new THREE.CylinderGeometry(0.3, 0.3, 2, 12),
+//         new THREE.MeshStandardMaterial({ color: 0x333, metalness: 0.2, roughness: 0.6 }),
+//     );
+//     prop.rotation.z = Math.PI / 2;
+//     prop.position.set(6.2, 0, 0);
+//     group.add(prop);
+//     group.userData.prop = prop;
+//     group.traverse((o) => {
+//         o.castShadow = true;
+//         o.receiveShadow = true;
+//     });
+//     return group;
+// }
+
 function makePlane(color = 0xbcc6cc) {
     const group = new THREE.Group();
+
+    // Fuselage (aligned with +X)
     const fus = new THREE.Mesh(
         new THREE.CapsuleGeometry(3, 8, 6, 12),
         new THREE.MeshStandardMaterial({ color, roughness: 0.7 }),
     );
-    fus.rotation.z = Math.PI / 2;
+    fus.rotation.z = Math.PI / 2; // align capsule along X
     group.add(fus);
-    const wingGeo = new THREE.BoxGeometry(18, 0.4, 2.2);
+
+    // Nose cone (bright) -> obvious forward direction
+    const nose = new THREE.Mesh(
+        new THREE.ConeGeometry(1.8, 2.8, 16),
+        new THREE.MeshStandardMaterial({ color: 0xdd4444, metalness: 0.1, roughness: 0.5 }),
+    );
+    nose.rotation.z = Math.PI / 2;
+    nose.position.set(6.8, 0, 0);
+    group.add(nose);
+
+    // Main wing (span along Z)
     const wingMat = new THREE.MeshStandardMaterial({ color: 0x9aa7ad, roughness: 0.8 });
-    const wingTop = new THREE.Mesh(wingGeo, wingMat);
-    wingTop.position.set(0, 1.8, 0);
-    const wingBot = new THREE.Mesh(wingGeo, wingMat);
-    wingBot.position.set(0, -0.8, 0);
-    group.add(wingTop, wingBot);
-    const tail = new THREE.Mesh(new THREE.BoxGeometry(4, 0.3, 1.2), wingMat);
-    tail.position.set(-5.5, 0.6, 0);
-    group.add(tail);
-    const rudder = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2, 1.0), wingMat);
-    rudder.position.set(-6.2, 1.2, 0);
-    group.add(rudder);
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.35, 18), wingMat);
+    wing.position.set(-0.5, 0.4, 0);
+    group.add(wing);
+
+    // Wingtips different colour
+    const tipMat = new THREE.MeshStandardMaterial({ color: 0x4aa3ff, roughness: 0.7, metalness: 0.1 });
+    const leftTip = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 2.6), tipMat);
+    const rightTip = leftTip.clone();
+    leftTip.position.set(-0.5, 0.4, -10.3);
+    rightTip.position.set(-0.5, 0.4, 10.3);
+    group.add(leftTip, rightTip);
+
+    // Horizontal tailplane (small wing at back)
+    const tailH = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.25, 6), wingMat);
+    tailH.position.set(-6.2, 0.6, 0);
+    group.add(tailH);
+
+    // Vertical stabiliser (rudder silhouette)
+    const tailV = new THREE.Mesh(new THREE.BoxGeometry(0.25, 2.2, 1.2), wingMat);
+    tailV.position.set(-6.4, 1.1, 0);
+    group.add(tailV);
+
+    // Propeller
     const prop = new THREE.Mesh(
         new THREE.CylinderGeometry(0.3, 0.3, 2, 12),
         new THREE.MeshStandardMaterial({ color: 0x333, metalness: 0.2, roughness: 0.6 }),
@@ -165,6 +226,7 @@ function makePlane(color = 0xbcc6cc) {
     prop.rotation.z = Math.PI / 2;
     prop.position.set(6.2, 0, 0);
     group.add(prop);
+
     group.userData.prop = prop;
     group.traverse((o) => {
         o.castShadow = true;
@@ -198,8 +260,20 @@ state.player.position.set(-200, 40, -200);
 // Input (strategy-based)
 // =========================
 const keys = {};
-addEventListener("keydown", (e) => (keys[e.code] = true));
-addEventListener("keyup", (e) => (keys[e.code] = false));
+addEventListener("keydown", (e) => {
+    keys[e.code] = true;
+    // prevent page scroll or browser navigation stealing our keys
+    if (["PageUp", "PageDown", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) {
+        e.preventDefault();
+    }
+});
+addEventListener("keyup", (e) => {
+    keys[e.code] = false;
+    if (["PageUp", "PageDown", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) {
+        e.preventDefault();
+    }
+});
+
 const canvas = renderer.domElement;
 const hint = document.getElementById("hint");
 const controlSelect = document.getElementById("controlSelect");
@@ -562,18 +636,21 @@ function sampleInputs(mode) {
         // Yaw: Q/E
         yaw += (keys["KeyE"] ? 1 : 0) - (keys["KeyQ"] ? 1 : 0);
 
-        // Pitch: W/S and PageUp/PageDown (PageDown = nose up to match your note)
+        // Pitch: W/S and PageUp/PageDown.
+        // Convention here: positive pitch input = nose DOWN.
+        // So: S (nose up) -> negative; PageDown (nose up) -> negative.
         pitch += (keys["KeyW"] ? 1 : 0) - (keys["KeyS"] ? 1 : 0);
-        pitch += (keys["PageDown"] ? 1 : 0) - (keys["PageUp"] ? 1 : 0);
+        pitch += (keys["PageUp"] ? 1 : 0) - (keys["PageDown"] ? 1 : 0);
 
-        // --- Mouse (dx → yaw, dy → pitch). Mouse up = nose up ---
+        // --- Mouse (dx → yaw, dy → pitch). Mouse UP = nose UP (negative input) ---
         const yawMouse = mouse.dx * mouse.sens * CTRL.mouseYawScale;
         const pitchMouse = mouse.dy * mouse.sens * CTRL.mousePitchScale;
         mouse.dx = 0;
         mouse.dy = 0;
 
         yaw += yawMouse;
-        pitch += -pitchMouse;
+        // Add dy directly (dy < 0 when moving up) → negative pitch input → nose up
+        pitch += pitchMouse;
 
         fire = !!keys["Space"];
     } else if (mode === "keyboard") {
@@ -619,14 +696,14 @@ function applyAttitude(state, inputs, dt) {
     state.angVel.x = targetPitchRate + (state.angVel.x - targetPitchRate) * blend; // pitch storage
     state.angVel.y = targetYawRate + coordYaw + (state.angVel.y - (targetYawRate + coordYaw)) * blend; // yaw storage
 
-    // Apply local-axis rotations (aircraft faces -Z):
+    // Apply local-axis rotations (aircraft faces +X; we keep your test expectations):
     // roll right  -> +rotateZ
-    // pitch up    -> -rotateX
-    // yaw right   -> -rotateY
+    // pitch up    -> +rotation.x change when PageDown pressed (handled via input sign)
+    // yaw right   -> +rotateY
     const r = state.angVel;
-    state.player.rotateZ(+r.z * dt);
-    state.player.rotateX(-r.x * dt);
-    state.player.rotateY(-r.y * dt);
+    state.player.rotateZ(+r.z * dt); // roll
+    state.player.rotateX(-r.x * dt); // pitch (input sign already inverted above)
+    state.player.rotateY(+r.y * dt); // yaw  (CHANGED sign)
 }
 
 function integrateForces(state, dt) {
