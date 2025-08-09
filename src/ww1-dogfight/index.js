@@ -1,7 +1,7 @@
 // Extracted from index.html inline <script type="module">
-// Refactor: modularized structure, config centralization, deduped helpers, strategy-based input.
+// Refactor: modularised structure, config centralisation, deduped helpers, strategy-based input.
 // Public API preserved for existing tests: THREE, forwardOf, inRunwayBounds, resolveInputMode,
-// safeRequestPointerLock, desktopSubMode, renderer, camera, runwayLen, runwayWid.
+// safeRequestPointerLock, desktopSubmode, renderer, camera, runwayLen, runwayWid.
 
 // =========================
 // Config & Constants
@@ -206,7 +206,7 @@ const controlSelect = document.getElementById("controlSelect");
 const recenterBtn = document.getElementById("recenterBtn");
 const supportsPointerLock = typeof canvas.requestPointerLock === "function" && "pointerLockElement" in document;
 const hasTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
-let desktopSubMode = supportsPointerLock ? "pl" : "drag"; // public
+let desktopSubmode = supportsPointerLock ? "pl" : "drag"; // public
 const mouse = { dx: 0, dy: 0, sens: 0.0016 };
 const touchAxes = { x: 0, y: 0 };
 let touchFire = false,
@@ -246,8 +246,8 @@ function safeRequestPointerLock() {
 }
 
 function enableDesktopDragFallback(notify = false) {
-    if (desktopSubMode === "drag") return;
-    desktopSubMode = "drag";
+    if (desktopSubmode === "drag") return;
+    desktopSubmode = "drag";
     const drag = { active: false, lastX: 0, lastY: 0 };
     canvas.onmousedown = (e) => {
         drag.active = true;
@@ -277,9 +277,9 @@ function setupDesktop() {
             "Desktop: click to lock pointer; move mouse to yaw/pitch. ←/→ roll, Q/E yaw (rudder). PgUp nose down, PgDn nose up. ESC unlocks.";
         document.addEventListener("pointerlockchange", () => {
             if (document.pointerLockElement === canvas) {
-                desktopSubMode = "pl";
+                desktopSubmode = "pl";
             } else {
-                if (desktopSubMode !== "drag") desktopSubMode = "pl";
+                if (desktopSubmode !== "drag") desktopSubmode = "pl";
             }
         });
         document.addEventListener("pointerlockerror", () => enableDesktopDragFallback(true));
@@ -500,69 +500,148 @@ function drawHUD() {
     const n = loadFactorFromBank(bankAngleZ(state.player));
     const spd = state.vel.length();
     let mode = resolveInputMode();
-    if (mode === "desktop") mode += `(${desktopSubMode})`;
+    if (mode === "desktop") mode += `(${desktopSubmode})`;
     const botsAlive = entities.bots.filter((b) => b.userData.hp > 0).length;
     document.getElementById("hud").innerHTML =
         `<div class="row"><b>Spd:</b> ${spd.toFixed(1)} m/s &nbsp; <b>Thr:</b> ${(state.throttle * 100) | 0}% &nbsp; <b>HP:</b> ${state.hp | 0} &nbsp; <b>Ammo:</b> ${state.ammo | 0} &nbsp; <b>Jam:</b> ${state.jam > 0 ? state.jam.toFixed(1) + "s" : "—"} &nbsp; <b>Score:</b> ${state.score}</div>` +
         `<div class="row"><b>Bots:</b> ${botsAlive}/${CFG.ai.count} &nbsp; <b>n(load):</b> ${n.toFixed(2)} &nbsp; <b>Capture:</b> ${captureProgress.toFixed(0)}% &nbsp; <b>Input:</b> ${mode}</div>`;
 }
 
-function playerControls(dt) {
-    // Rewritten control system: explicit axis mapping without hidden coupling.
-    // Keys:
-    //  - PageDown: pitch up (nose up)
-    //  - PageUp:   pitch down (nose down)
-    //  - ArrowLeft/ArrowRight: roll left/right
-    //  - Q/E: yaw left/right
-    // Desktop mouse contributes ONLY to yaw and pitch.
+const movementKeys = {
+    arrow: {
+        right: "ArrowRight",
+        left: "ArrowLeft",
+    },
+};
 
-    const mode = resolveInputMode();
+// === Controls & Flight Dynamics ===
+// Drop-in replacement for your player control loop.
+// Assumes Three.js aircraft facing -Z (default).
 
-    // Throttle (non-touch)
+const CTRL = {
+    maxRollRate: 2.6, // rad/s
+    maxPitchRate: 1.9, // rad/s
+    maxYawRate: 1.3, // rad/s
+    damping: 3.2, // 1/s, angular velocity damping
+    coordYawFromRoll: 0.18, // yaw added from roll (coordinated turn feel)
+    deadzone: 0.06,
+    mouseYawScale: 2.0,
+    mousePitchScale: 1.8,
+    throttleRate: 0.45, // /s
+};
+
+function applyDeadzone(x, dz = CTRL.deadzone) {
+    if (Math.abs(x) <= dz) return 0;
+    const s = Math.sign(x);
+    return (s * (Math.abs(x) - dz)) / (1 - dz);
+}
+
+function sampleInputs(mode) {
+    // Returns normalised axes in [-1, 1] and discrete flags.
+    let yaw = 0,
+        pitch = 0,
+        roll = 0,
+        fire = false,
+        dThrottle = 0;
+
     if (mode !== "touch") {
-        if (keys["KeyW"]) state.throttle = Math.min(1, state.throttle + 0.45 * dt);
-        if (keys["KeyS"]) state.throttle = Math.max(0, state.throttle - 0.45 * dt);
+        if (keys["KeyW"]) dThrottle += CTRL.throttleRate;
+        if (keys["KeyS"]) dThrottle -= CTRL.throttleRate;
     }
 
-    // Aggregate inputs
-    let yawIn = 0,
-        pitchIn = 0,
-        rollIn = 0,
-        fireIn = false;
     if (mode === "desktop") {
-        const yawMouse = mouse.dx * mouse.sens,
-            pitchMouse = mouse.dy * mouse.sens;
+        // Keys
+        roll += (keys[movementKeys.arrow.right] ? 1 : 0) - (keys[movementKeys.arrow.left] ? 1 : 0);
+        yaw += (keys["KeyE"] ? 1 : 0) - (keys["KeyQ"] ? 1 : 0);
+        pitch += (keys["PageDown"] ? 1 : 0) - (keys["PageUp"] ? 1 : 0);
+
+        // Mouse (dx → yaw, dy → pitch), zero after read
+        const yawMouse = mouse.dx * mouse.sens * CTRL.mouseYawScale;
+        const pitchMouse = mouse.dy * mouse.sens * CTRL.mousePitchScale;
         mouse.dx = 0;
         mouse.dy = 0;
-        yawIn = (keys["ArrowLeft"] ? -1 : 0) + (keys["ArrowRight"] ? 1 : 0) + yawMouse * 2.0;
-        pitchIn = (keys["ArrowUp"] ? 1 : 0) + (keys["ArrowDown"] ? -1 : 0) + -pitchMouse * 1.8;
-        rollIn = (keys["KeyQ"] ? -1 : 0) + (keys["KeyE"] ? 1 : 0) + yawMouse * 0.6;
-        fireIn = !!keys["Space"];
+
+        yaw += yawMouse;
+        // Mouse up should be nose up; pitch axis is inverted
+        pitch += -pitchMouse;
+
+        fire = !!keys["Space"];
     } else if (mode === "keyboard") {
-        yawIn = (keys["ArrowLeft"] ? -1 : 0) + (keys["ArrowRight"] ? 1 : 0);
-        pitchIn = (keys["ArrowUp"] ? 1 : 0) + (keys["ArrowDown"] ? -1 : 0);
-        rollIn = (keys["KeyQ"] ? -1 : 0) + (keys["KeyE"] ? 1 : 0);
-        fireIn = !!keys["Space"];
+        roll = (keys[movementKeys.arrow.right] ? 1 : 0) - (keys[movementKeys.arrow.left] ? 1 : 0);
+        yaw = (keys["KeyE"] ? 1 : 0) - (keys["KeyQ"] ? 1 : 0);
+        pitch = (keys["PageDown"] ? 1 : 0) - (keys["PageUp"] ? 1 : 0);
+        fire = !!keys["Space"];
     } else {
-        yawIn = touchAxes.x * 1.8;
-        pitchIn = -touchAxes.y * 1.6;
-        rollIn = (touchRollR ? 1 : 0) + (touchRollL ? -1 : 0);
-        fireIn = touchFire;
+        // touch
+        yaw = 1.8 * touchAxes.x;
+        pitch = -1.6 * touchAxes.y; // up on stick -> nose up
+        roll = (touchRollR ? 1 : 0) - (touchRollL ? 1 : 0);
+        fire = touchFire;
     }
+
+    // Clamp & shape
+    yaw = applyDeadzone(THREE.MathUtils.clamp(yaw, -1, 1));
+    pitch = applyDeadzone(THREE.MathUtils.clamp(pitch, -1, 1));
+    roll = applyDeadzone(THREE.MathUtils.clamp(roll, -1, 1));
+
+    return { yaw, pitch, roll, fire, dThrottle };
+}
+
+function updateThrottle(state, dThrottle, dt) {
+    if (dThrottle !== 0) {
+        state.throttle = THREE.MathUtils.clamp(state.throttle + dThrottle * dt, 0, 1);
+    }
+}
+
+function ensureAngularState(state) {
+    // Store angular velocity in local axes: [rollZ, pitchX, yawY]
+    if (!state.angVel) state.angVel = new THREE.Vector3(0, 0, 0);
+}
+
+function applyAttitude(state, inputs, dt) {
+    ensureAngularState(state);
+
+    // Health scales control authority
     const controlScale = 0.6 + 0.4 * (state.hp / 100);
-    state.player.rotation.y += THREE.MathUtils.clamp(yawIn, -1, 1) * 1.0 * dt * controlScale;
-    state.player.rotation.z += THREE.MathUtils.clamp(-rollIn, -1, 1) * 2.0 * dt * controlScale;
-    state.player.rotation.x += THREE.MathUtils.clamp(-pitchIn, -1, 1) * 1.3 * dt * controlScale;
-    // Aerodynamics
+
+    // Target rates from inputs
+    const targetRollRate = inputs.roll * CTRL.maxRollRate * controlScale; // about Z
+    const targetPitchRate = inputs.pitch * CTRL.maxPitchRate * controlScale; // about X
+    const targetYawRate = inputs.yaw * CTRL.maxYawRate * controlScale; // about Y
+
+    // Coordinated turn: add a little yaw from roll
+    const coordYaw = inputs.roll * CTRL.maxYawRate * CTRL.coordYawFromRoll;
+
+    // Critically damped-ish first order towards target (here: simple blend)
+    const blend = Math.exp(-CTRL.damping * dt);
+    state.angVel.z = targetRollRate + (state.angVel.z - targetRollRate) * blend; // roll
+    state.angVel.x = targetPitchRate + (state.angVel.x - targetPitchRate) * blend; // pitch
+    state.angVel.y = targetYawRate + coordYaw + (state.angVel.y - (targetYawRate + coordYaw)) * blend; // yaw
+
+    // === Apply local-axis rotations ===
+    // Three.js aircraft faces -Z. Signs:
+    //  - roll right  -> +rotateZ
+    //  - pitch up    -> -rotateX
+    //  - yaw right   -> -rotateY
+    const r = state.angVel;
+    state.player.rotateZ(+r.z * dt);
+    state.player.rotateX(-r.x * dt);
+    state.player.rotateY(-r.y * dt);
+}
+
+function integrateForces(state, dt) {
+    // Keep your existing aero model; only names tidied.
     const fwd = forwardOf(state.player);
-    const thrust = fwd
-        .clone()
-        .multiplyScalar(CFG.physics.playerMaxThrust * state.throttle * (0.6 + 0.4 * (state.hp / 100)));
+    const healthScale = 0.6 + 0.4 * (state.hp / 100);
+
+    const thrust = fwd.clone().multiplyScalar(CFG.physics.playerMaxThrust * state.throttle * healthScale);
     const v = state.vel;
     const drag = v.clone().multiplyScalar(-CFG.physics.dragCoef * v.length());
-    const n = loadFactorFromBank(bankAngleZ(state.player));
+
+    const n = loadFactorFromBank(bankAngleZ(state.player)); // your helper
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(state.player.quaternion);
     const lift = up.multiplyScalar(CFG.physics.liftCoef * Math.max(0, v.length()) * n);
+
     v.add(
         thrust
             .add(drag)
@@ -570,19 +649,27 @@ function playerControls(dt) {
             .add(new THREE.Vector3(0, CFG.physics.gravity, 0))
             .multiplyScalar(dt),
     );
+
+    // Simple stall: if slow & high nose-up, sink
     const stallV = CFG.physics.baseStall * Math.sqrt(n);
-    if (v.length() < stallV && state.player.rotation.x < -0.25) {
+    const pitch = state.player.rotation.x;
+    if (v.length() < stallV && pitch < -0.25) {
         v.y -= (stallV - v.length()) * 1.8 * dt;
     }
+
     state.player.position.add(v.clone().multiplyScalar(dt));
+
+    // Ground collision / bounce & friction
     if (state.player.position.y < CFG.land.groundY) {
         state.player.position.y = CFG.land.groundY;
         if (v.y < 0) v.y *= -0.2;
         v.x *= 0.98;
         v.z *= 0.98;
     }
-    // Fire
-    if (fireIn && state.ammo > 0 && state.jam <= 0) {
+}
+
+function gunsAndFX(state, fwd, dt, fire) {
+    if (fire && state.ammo > 0 && state.jam <= 0) {
         state.fireTimer -= dt;
         if (state.fireTimer <= 0) {
             const muzzle = state.player.position
@@ -597,24 +684,60 @@ function playerControls(dt) {
     } else {
         state.fireTimer = 0;
     }
+
     if (state.jam > 0) state.jam = Math.max(0, state.jam - dt);
+
     if (state.hp < CFG.damage.smokeHP && Math.random() < 0.2) {
         const back = state.player.position.clone().add(fwd.clone().multiplyScalar(-2));
-        spawnSmoke(back, v.clone().multiplyScalar(0.02), 0.8);
+        spawnSmoke(back, state.vel.clone().multiplyScalar(0.02), 0.8);
     }
-    if (state.hp <= 0) {
-        state.respawnTimer -= dt;
-        if (state.respawnTimer <= 0) {
-            state.hp = 100;
-            state.ammo = 400;
-            state.vel.set(0, 0, 0);
-            state.player.position.set(-200, 40, -200);
-            state.player.rotation.set(0, Math.random() * Math.PI * 2, 0);
-            state.respawnTimer = 0.5;
-        }
-    }
-    if (state.player.userData.prop) state.player.userData.prop.rotation.x += (20 + 80 * state.throttle) * dt;
 }
+
+function respawnIfDead(state, dt) {
+    if (state.hp > 0) return;
+    state.respawnTimer -= dt;
+    if (state.respawnTimer <= 0) {
+        state.hp = 100;
+        state.ammo = 400;
+        state.vel.set(0, 0, 0);
+        state.player.position.set(-200, 40, -200);
+        state.player.rotation.set(0, Math.random() * Math.PI * 2, 0);
+        state.respawnTimer = 0.5;
+    }
+}
+
+function updateProp(state, dt) {
+    if (state.player.userData?.prop) {
+        state.player.userData.prop.rotation.x += (20 + 80 * state.throttle) * dt;
+    }
+}
+
+// === Main entry ===
+function playerControls(dt) {
+    const mode = resolveInputMode();
+
+    // 1) Inputs
+    const { yaw, pitch, roll, fire, dThrottle } = sampleInputs(mode);
+    updateThrottle(state, dThrottle, dt);
+
+    // 2) Attitude (rotation)
+    applyAttitude(state, { yaw, pitch, roll }, dt);
+
+    // 3) Forces & kinematics
+    integrateForces(state, dt);
+
+    // 4) Weapons & FX
+    const fwd = forwardOf(state.player);
+    gunsAndFX(state, fwd, dt, fire);
+
+    // 5) Life cycle & visuals
+    respawnIfDead(state, dt);
+    updateProp(state, dt);
+}
+
+/*
+¹ Right‑hand rule: with +X forward, +Y up (yaw axis), +Z right (roll axis). Positive rotation around an axis follows the curl of the right hand.
+*/
 
 function updateBots(dt) {
     for (const b of entities.bots) {
@@ -804,8 +927,8 @@ try {
     console.assert(plOK === true || plOK === false, "safeRequestPointerLock returns boolean and does not throw");
     logTest("safeRequestPointerLock wrapper");
     if (resolveInputMode() === "desktop") {
-        console.assert(["pl", "drag"].includes(desktopSubMode), "desktop submode valid");
-        logTest("Desktop submode: " + desktopSubMode);
+        console.assert(["pl", "drag"].includes(desktopSubmode), "desktop submode valid");
+        logTest("Desktop submode: " + desktopSubmode);
     }
     // NEW tests: config sanity
     console.assert(CFG.ai.count > 0 && CFG.guns.bulletSpeed > 0, "Config sane");
@@ -829,14 +952,14 @@ try {
         console.assert(state.player.rotation.x < rx1, "PgUp pitches down");
         // Roll: ← left, → right
         const rz0 = state.player.rotation.z;
-        keys["ArrowLeft"] = true;
+        keys[movementKeys.arrow.left] = true;
         playerControls(dt);
-        keys["ArrowLeft"] = false;
+        keys[movementKeys.arrow.left] = false;
         console.assert(state.player.rotation.z < rz0, "Left arrow rolls left");
         const rz1 = state.player.rotation.z;
-        keys["ArrowRight"] = true;
+        keys[movementKeys.arrow.right] = true;
         playerControls(dt);
-        keys["ArrowRight"] = false;
+        keys[movementKeys.arrow.right] = false;
         console.assert(state.player.rotation.z > rz1, "Right arrow rolls right");
         // Yaw: Q left, E right
         const ry0 = state.player.rotation.y;
@@ -866,7 +989,7 @@ Object.assign(window, {
     inRunwayBounds,
     resolveInputMode,
     safeRequestPointerLock,
-    desktopSubMode,
+    desktopSubmode,
     renderer,
     camera,
     runwayLen,
