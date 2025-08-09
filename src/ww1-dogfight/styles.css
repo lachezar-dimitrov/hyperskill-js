@@ -1,0 +1,274 @@
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #0b0f16;
+    font-family:
+        system-ui,
+        Segoe UI,
+        Roboto,
+        Inter,
+        Arial;
+}
+
+#hud {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    color: #e6ecf1;
+    background: rgba(0, 0, 0, 0.35);
+    padding: 10px 12px;
+    border-radius: 10px;
+    line-height: 1.25;
+    font-size: 14px;
+    z-index: 10;
+}
+
+#hud .row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+#msg {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    color: #e6ecf1;
+    background: rgba(0, 0, 0, 0.35);
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    max-width: 42ch;
+    z-index: 10;
+}
+
+#capture {
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #e6ecf1;
+    background: rgba(0, 0, 0, 0.35);
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    z-index: 10;
+}
+
+#crosshair {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    width: 24px;
+    height: 24px;
+    margin-left: -12px;
+    margin-top: -12px;
+    border: 2px solid rgba(255, 255, 255, 0.7);
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25) inset;
+    z-index: 5;
+}
+
+#crosshair:after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 2px;
+    height: 2px;
+    background: #fff;
+    margin-left: -1px;
+    margin-top: -1px;
+    border-radius: 50%;
+}
+
+.testbar {
+    position: fixed;
+    bottom: 12px;
+    right: 12px;
+    background: rgba(0, 0, 0, 0.35);
+    color: #cfe3ee;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    max-width: 46ch;
+    white-space: pre-line;
+    z-index: 10;
+}
+
+.hint {
+    position: fixed;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(0, 0, 0, 0.35);
+    color: #cfe3ee;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    z-index: 10;
+}
+
+#controlsPanel {
+    position: fixed;
+    left: 50%;
+    top: 12px;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.35);
+    color: #cfe3ee;
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-size: 12px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    z-index: 11;
+    backdrop-filter: blur(2px);
+}
+
+#controlsPanel select,
+#controlsPanel button {
+    font-size: 12px;
+    padding: 4px 6px;
+    border-radius: 8px;
+    border: 1px solid #5f7a85;
+    background: #0f1620;
+    color: #cfe3ee;
+}
+
+/* Touch UI */
+#touchUI {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9;
+}
+
+.stick {
+    position: absolute;
+    bottom: 10%;
+    left: 8%;
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    pointer-events: auto;
+    touch-action: none;
+}
+
+.stick .nub {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 64px;
+    height: 64px;
+    margin-left: -32px;
+    margin-top: -32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.throttle {
+    position: absolute;
+    bottom: 10%;
+    right: 8%;
+    width: 44px;
+    height: 180px;
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    pointer-events: auto;
+    touch-action: none;
+    display: flex;
+    align-items: flex-end;
+}
+
+.throttle .knob {
+    width: 100%;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.18);
+    border-top: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 20px;
+}
+
+.btnBox {
+    position: absolute;
+    bottom: 28%;
+    right: 8%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: auto;
+}
+
+.btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #e6ecf1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    user-select: none;
+    touch-action: none;
+}
+
+.btn:active {
+    transform: scale(0.96);
+}
+
+.btn.small {
+    width: 52px;
+    height: 52px;
+}
+
+/* Extracted from inline style in HTML */
+.btnRow {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+    #msg {
+        display: none;
+    }
+    .testbar {
+        display: none;
+    }
+    #hud {
+        font-size: 12px;
+    }
+    .stick {
+        width: 120px;
+        height: 120px;
+    }
+    .stick .nub {
+        width: 56px;
+        height: 56px;
+        margin-left: -28px;
+        margin-top: -28px;
+    }
+    .throttle {
+        height: 160px;
+    }
+    .throttle .knob {
+        height: 40px;
+    }
+    .btn {
+        width: 56px;
+        height: 56px;
+    }
+    .btn.small {
+        width: 46px;
+        height: 46px;
+    }
+}
