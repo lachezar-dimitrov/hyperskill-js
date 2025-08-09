@@ -2,8 +2,8 @@
 <html lang="en">
     <head>
         <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>WW1 Dogfight – Single Player vs Bots (Improved Demo)</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        <title>WW1 Dogfight – Single Player vs Bots (Mobile + Desktop)</title>
         <style>
             html,
             body {
@@ -29,11 +29,13 @@
                 border-radius: 10px;
                 line-height: 1.25;
                 font-size: 14px;
+                z-index: 10;
             }
             #hud .row {
                 display: flex;
                 gap: 10px;
                 align-items: center;
+                flex-wrap: wrap;
             }
             #msg {
                 position: fixed;
@@ -44,7 +46,8 @@
                 padding: 10px 12px;
                 border-radius: 10px;
                 font-size: 14px;
-                max-width: 40ch;
+                max-width: 42ch;
+                z-index: 10;
             }
             #capture {
                 position: fixed;
@@ -56,6 +59,7 @@
                 padding: 10px 12px;
                 border-radius: 10px;
                 font-size: 14px;
+                z-index: 10;
             }
             #crosshair {
                 position: fixed;
@@ -68,6 +72,7 @@
                 border: 2px solid rgba(255, 255, 255, 0.7);
                 border-radius: 50%;
                 box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25) inset;
+                z-index: 5;
             }
             #crosshair:after {
                 content: "";
@@ -90,8 +95,9 @@
                 padding: 10px 12px;
                 border-radius: 10px;
                 font-size: 12px;
-                max-width: 42ch;
+                max-width: 46ch;
                 white-space: pre-line;
+                z-index: 10;
             }
             .hint {
                 position: fixed;
@@ -102,24 +108,196 @@
                 padding: 10px 12px;
                 border-radius: 10px;
                 font-size: 12px;
+                z-index: 10;
             }
-            a {
-                color: #9ad1ff;
+            #controlsPanel {
+                position: fixed;
+                left: 50%;
+                top: 12px;
+                transform: translateX(-50%);
+                background: rgba(0, 0, 0, 0.35);
+                color: #cfe3ee;
+                padding: 8px 10px;
+                border-radius: 10px;
+                font-size: 12px;
+                display: flex;
+                gap: 8px;
+                align-items: center;
+                z-index: 11;
+                backdrop-filter: blur(2px);
+            }
+            #controlsPanel select,
+            #controlsPanel button {
+                font-size: 12px;
+                padding: 4px 6px;
+                border-radius: 8px;
+                border: 1px solid #5f7a85;
+                background: #0f1620;
+                color: #cfe3ee;
+            }
+
+            /* Touch UI */
+            #touchUI {
+                position: fixed;
+                inset: 0;
+                pointer-events: none;
+                z-index: 9;
+            }
+            .stick {
+                position: absolute;
+                bottom: 10%;
+                left: 8%;
+                width: 140px;
+                height: 140px;
+                border-radius: 50%;
+                background: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                pointer-events: auto;
+                touch-action: none;
+            }
+            .stick .nub {
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                width: 64px;
+                height: 64px;
+                margin-left: -32px;
+                margin-top: -32px;
+                border-radius: 50%;
+                background: rgba(255, 255, 255, 0.18);
+                border: 1px solid rgba(255, 255, 255, 0.4);
+            }
+            .throttle {
+                position: absolute;
+                bottom: 10%;
+                right: 8%;
+                width: 44px;
+                height: 180px;
+                border-radius: 24px;
+                background: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                pointer-events: auto;
+                touch-action: none;
+                display: flex;
+                align-items: flex-end;
+            }
+            .throttle .knob {
+                width: 100%;
+                height: 44px;
+                background: rgba(255, 255, 255, 0.18);
+                border-top: 1px solid rgba(255, 255, 255, 0.4);
+                border-radius: 20px;
+            }
+            .btnBox {
+                position: absolute;
+                bottom: 28%;
+                right: 8%;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                pointer-events: auto;
+            }
+            .btn {
+                width: 64px;
+                height: 64px;
+                border-radius: 50%;
+                background: rgba(255, 255, 255, 0.12);
+                border: 1px solid rgba(255, 255, 255, 0.35);
+                color: #e6ecf1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 700;
+                user-select: none;
+                touch-action: none;
+            }
+            .btn:active {
+                transform: scale(0.96);
+            }
+            .btn.small {
+                width: 52px;
+                height: 52px;
+            }
+
+            @media (max-width: 768px) {
+                #msg {
+                    display: none;
+                }
+                .testbar {
+                    display: none;
+                }
+                #hud {
+                    font-size: 12px;
+                }
+                .stick {
+                    width: 120px;
+                    height: 120px;
+                }
+                .stick .nub {
+                    width: 56px;
+                    height: 56px;
+                    margin-left: -28px;
+                    margin-top: -28px;
+                }
+                .throttle {
+                    height: 160px;
+                }
+                .throttle .knob {
+                    height: 40px;
+                }
+                .btn {
+                    width: 56px;
+                    height: 56px;
+                }
+                .btn.small {
+                    width: 46px;
+                    height: 46px;
+                }
             }
         </style>
     </head>
     <body>
         <div id="hud"></div>
         <div id="msg">
-            Click the game to lock mouse. W/S throttle · ←/→ yaw · ↑/↓ pitch · Q/E roll · Space fire · Land on runway
-            (slow & level) to repair & reload
+            Desktop: click to lock mouse (if supported). W/S throttle · ←/→ yaw · ↑/↓ pitch · Q/E roll · Space fire ·
+            Land on runway (slow & level) to repair & reload
         </div>
         <div id="capture">Runway: <span id="capPct">0%</span> (hold to capture)</div>
         <div id="crosshair"></div>
         <div class="testbar" id="testbar">Running self-tests…</div>
-        <div class="hint">Mouse controls: move to aim (yaw/pitch), Q/E to bank. ESC to unlock.</div>
+        <div class="hint" id="hint">Input initialising…</div>
+
+        <!-- Controls picker -->
+        <div id="controlsPanel">
+            <label for="controlSelect">Controls:</label>
+            <select id="controlSelect" aria-label="Controls">
+                <option value="auto">Auto</option>
+                <option value="desktop">Desktop (mouse/keys)</option>
+                <option value="touch">Phone/Tablet (touch)</option>
+                <option value="keyboard">Keyboard only</option>
+            </select>
+            <button id="recenterBtn" title="Re-centre joystick">Re-centre</button>
+        </div>
+
+        <!-- Touch UI overlay (hidden on desktop unless chosen) -->
+        <div id="touchUI" hidden>
+            <div class="stick" id="stick">
+                <div class="nub" id="stickNub"></div>
+            </div>
+            <div class="throttle" id="throttle">
+                <div class="knob" id="throttleKnob"></div>
+            </div>
+            <div class="btnBox">
+                <div class="btn" id="fireBtn">●</div>
+                <div style="display: flex; gap: 10px; justify-content: flex-end">
+                    <div class="btn small" id="rollL">⟲</div>
+                    <div class="btn small" id="rollR">⟳</div>
+                </div>
+            </div>
+        </div>
 
         <script type="module">
+            // ----- Load Three.js as ESM with CDN fallbacks -----
             async function loadThree() {
                 const cdns = [
                     "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
@@ -139,7 +317,6 @@
 
             const testbar = document.getElementById("testbar");
             function logTest(msg, ok = true) {
-                // IMPORTANT: use \n, not a literal newline inside quotes
                 testbar.textContent =
                     (testbar.textContent ? testbar.textContent + "\n" : "") + (ok ? "✅ " : "❌ ") + msg;
             }
@@ -156,7 +333,6 @@
 
             // ====== Scene & Renderer ======
             const scene = new THREE.Scene();
-            // Gradient sky base
             const skyTop = new THREE.Color(0x6aa0d8),
                 skyBottom = new THREE.Color(0x102030);
             scene.background = skyBottom.clone();
@@ -198,7 +374,6 @@
                 scene.add(m);
             }
 
-            // Props (trees)
             const treeMat = new THREE.MeshStandardMaterial({ color: 0x3f4d3f, roughness: 0.9 });
             for (let i = 0; i < 120; i++) {
                 const tree = new THREE.Mesh(
@@ -217,7 +392,7 @@
             }
             function bankAngleZ(obj) {
                 return -obj.rotation.z;
-            } // roll right positive
+            }
             function loadFactorFromBank(phi) {
                 const c = Math.cos(phi);
                 return 1 / Math.max(0.1, c);
@@ -274,12 +449,12 @@
                 vel: new THREE.Vector3(),
                 hp: 100,
                 ammo: 400,
-                jam: 0, // gun jam cooldown
+                jam: 0,
                 score: 0,
                 landed: false,
             };
 
-            // ====== Input (Keyboard + Mouse pointer lock) ======
+            // ====== Input System (Desktop/Touch/Keyboard-only) ======
             const keys = {};
             addEventListener("keydown", (e) => {
                 keys[e.code] = true;
@@ -289,17 +464,270 @@
             });
 
             const canvas = renderer.domElement;
-            canvas.addEventListener("click", () => {
-                if (document.pointerLockElement !== canvas) canvas.requestPointerLock();
+            const hint = document.getElementById("hint");
+            const controlSelect = document.getElementById("controlSelect");
+            const recenterBtn = document.getElementById("recenterBtn");
+
+            // Capability detection
+            const supportsPointerLock =
+                typeof canvas.requestPointerLock === "function" && "pointerLockElement" in document;
+            const hasTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+
+            // Submode for desktop: 'pl' (pointer lock) | 'drag'
+            let desktopSubmode = supportsPointerLock ? "pl" : "drag";
+
+            // Input vectors (aggregated per frame)
+            const mouse = { dx: 0, dy: 0, sens: 0.0016 };
+            const touchAxes = { x: 0, y: 0 }; // -1..1 from joystick
+            let touchFire = false;
+            let touchRollL = false,
+                touchRollR = false;
+            let selectedMode = "auto";
+
+            function resolveInputMode() {
+                if (selectedMode === "desktop") return "desktop";
+                if (selectedMode === "touch") return "touch";
+                if (selectedMode === "keyboard") return "keyboard";
+                // auto
+                return hasTouch ? "touch" : "desktop";
+            }
+
+            controlSelect.addEventListener("change", () => {
+                selectedMode = controlSelect.value;
+                applyMode();
+            });
+            recenterBtn.addEventListener("click", () => {
+                setStick(0, 0, true);
             });
 
-            const mouse = { dx: 0, dy: 0, sens: 0.0016 };
-            addEventListener("mousemove", (e) => {
-                if (document.pointerLockElement === canvas) {
-                    mouse.dx += e.movementX;
-                    mouse.dy += e.movementY;
+            function safeRequestPointerLock() {
+                if (!supportsPointerLock) return false;
+                try {
+                    canvas.requestPointerLock();
+                    return true;
+                } catch (e) {
+                    // SecurityError in sandboxed frames without allow-pointer-lock
+                    console.warn("PointerLock blocked or failed:", e);
+                    return false;
                 }
-            });
+            }
+
+            // Desktop pointer lock OR drag fallback
+            function enableDesktopDragFallback(notify = false) {
+                if (desktopSubmode === "drag") return; // already active
+                desktopSubmode = "drag";
+                const drag = { active: false, lastX: 0, lastY: 0 };
+                canvas.onmousedown = (e) => {
+                    drag.active = true;
+                    drag.lastX = e.clientX;
+                    drag.lastY = e.clientY;
+                };
+                addEventListener("mouseup", () => {
+                    drag.active = false;
+                });
+                addEventListener("mouseleave", () => {
+                    drag.active = false;
+                });
+                addEventListener("mousemove", (e) => {
+                    if (drag.active) {
+                        mouse.dx += e.clientX - drag.lastX;
+                        mouse.dy += e.clientY - drag.lastY;
+                        drag.lastX = e.clientX;
+                        drag.lastY = e.clientY;
+                    }
+                });
+                addEventListener("keydown", (e) => {
+                    if (e.code === "Escape") drag.active = false;
+                });
+                if (notify)
+                    hint.textContent =
+                        "Pointer Lock not permitted here. Fallback: hold LEFT MOUSE and drag to aim. Q/E bank.";
+            }
+
+            function setupDesktop() {
+                if (supportsPointerLock) {
+                    hint.textContent = "Desktop: click to lock pointer; move to aim. Q/E bank. ESC to unlock.";
+                    document.addEventListener("pointerlockchange", () => {
+                        if (document.pointerLockElement === canvas) {
+                            desktopSubmode = "pl";
+                        } else {
+                            // If lock lost (ESC), stay in desktop mode; user can re-lock or drag
+                            if (desktopSubmode !== "drag") desktopSubmode = "pl";
+                        }
+                    });
+                    document.addEventListener("pointerlockerror", () => {
+                        enableDesktopDragFallback(true);
+                    });
+                    canvas.onclick = () => {
+                        const ok = safeRequestPointerLock();
+                        if (!ok) enableDesktopDragFallback(true);
+                    };
+                    // Also collect deltas when locked
+                    addEventListener("mousemove", (e) => {
+                        if (document.pointerLockElement === canvas) {
+                            mouse.dx += e.movementX;
+                            mouse.dy += e.movementY;
+                        }
+                    });
+                } else {
+                    enableDesktopDragFallback(false);
+                }
+                document.getElementById("touchUI").hidden = true;
+            }
+
+            // Touch UI setup
+            const touchUI = document.getElementById("touchUI");
+            const stick = document.getElementById("stick");
+            const stickNub = document.getElementById("stickNub");
+            const throttle = document.getElementById("throttle");
+            const throttleKnob = document.getElementById("throttleKnob");
+            const fireBtn = document.getElementById("fireBtn");
+            const rollLBtn = document.getElementById("rollL");
+            const rollRBtn = document.getElementById("rollR");
+
+            function setStick(nx, ny, immediate = false) {
+                // clamp -1..1
+                const x = Math.max(-1, Math.min(1, nx));
+                const y = Math.max(-1, Math.min(1, ny));
+                touchAxes.x = x;
+                touchAxes.y = y;
+                const r = stick.clientWidth / 2;
+                const cx = r,
+                    cy = r;
+                const px = cx + x * (r - 32);
+                const py = cy + y * (r - 32);
+                stickNub.style.left = px - 32 + "px";
+                stickNub.style.top = py - 32 + "px";
+            }
+
+            function setupTouch() {
+                hint.textContent = "Touch: left joystick = yaw/pitch, right slider = throttle, ● = fire, ⟲/⟳ = roll";
+                touchUI.hidden = false;
+                // Joystick
+                const state = { id: null, cx: 0, cy: 0, r: 0 };
+                const start = (x, y, id) => {
+                    const rect = stick.getBoundingClientRect();
+                    state.cx = rect.left + rect.width / 2;
+                    state.cy = rect.top + rect.height / 2;
+                    state.r = Math.min(rect.width, rect.height) / 2;
+                    state.id = id;
+                };
+                const move = (x, y) => {
+                    if (state.id == null) return;
+                    const dx = (x - state.cx) / state.r;
+                    const dy = (y - state.cy) / state.r;
+                    setStick(dx, dy);
+                };
+                const end = () => {
+                    state.id = null;
+                    setStick(0, 0, true);
+                };
+                stick.ontouchstart = (e) => {
+                    const t = e.changedTouches[0];
+                    start(t.clientX, t.clientY, t.identifier);
+                    move(t.clientX, t.clientY);
+                    e.preventDefault();
+                };
+                stick.ontouchmove = (e) => {
+                    for (const t of e.changedTouches) {
+                        if (state.id === t.identifier) move(t.clientX, t.clientY);
+                    }
+                    e.preventDefault();
+                };
+                stick.ontouchend = (e) => {
+                    for (const t of e.changedTouches) {
+                        if (state.id === t.identifier) end();
+                    }
+                    e.preventDefault();
+                };
+                stick.ontouchcancel = stick.ontouchend;
+
+                // Throttle slider (0..1 from bottom to top)
+                const ts = { id: null, top: 0, bottom: 0 };
+                const tStart = (y, id) => {
+                    const r = throttle.getBoundingClientRect();
+                    ts.top = r.top;
+                    ts.bottom = r.bottom;
+                    ts.id = id;
+                };
+                const tMove = (y) => {
+                    if (ts.id == null) return;
+                    const clamped = Math.max(ts.top, Math.min(ts.bottom, y));
+                    const frac = 1 - (clamped - ts.top) / (ts.bottom - ts.top);
+                    stateSetThrottle(frac);
+                };
+                const tEnd = () => {
+                    ts.id = null;
+                };
+                throttle.ontouchstart = (e) => {
+                    const t = e.changedTouches[0];
+                    tStart(t.clientY, t.identifier);
+                    tMove(t.clientY);
+                    e.preventDefault();
+                };
+                throttle.ontouchmove = (e) => {
+                    for (const t of e.changedTouches) {
+                        if (ts.id === t.identifier) tMove(t.clientY);
+                    }
+                    e.preventDefault();
+                };
+                throttle.ontouchend = (e) => {
+                    for (const t of e.changedTouches) {
+                        if (ts.id === t.identifier) tEnd();
+                    }
+                    e.preventDefault();
+                };
+                throttle.ontouchcancel = throttle.ontouchend;
+
+                // Fire button
+                fireBtn.ontouchstart = (e) => {
+                    touchFire = true;
+                    e.preventDefault();
+                };
+                fireBtn.ontouchend = (e) => {
+                    touchFire = false;
+                    e.preventDefault();
+                };
+                fireBtn.ontouchcancel = fireBtn.ontouchend;
+
+                // Roll buttons
+                const setHold = (btn, setter) => {
+                    btn.ontouchstart = (e) => {
+                        setter(true);
+                        e.preventDefault();
+                    };
+                    btn.ontouchend = (e) => {
+                        setter(false);
+                        e.preventDefault();
+                    };
+                    btn.ontouchcancel = btn.ontouchend;
+                };
+                setHold(rollLBtn, (v) => (touchRollL = v));
+                setHold(rollRBtn, (v) => (touchRollR = v));
+            }
+
+            function stateSetThrottle(frac) {
+                state.throttle = Math.max(0, Math.min(1, frac));
+                const h = throttle.clientHeight - throttleKnob.clientHeight;
+                throttleKnob.style.transform = `translateY(${(1 - state.throttle) * h}px)`;
+            }
+
+            function applyMode() {
+                const mode = resolveInputMode();
+                controlSelect.value = selectedMode;
+                if (mode === "desktop") {
+                    setupDesktop();
+                } else if (mode === "touch") {
+                    setupTouch();
+                } else {
+                    // keyboard
+                    hint.textContent = "Keyboard-only: arrows = yaw/pitch, Q/E roll, W/S throttle, Space fire";
+                    document.getElementById("touchUI").hidden = true;
+                }
+            }
+
+            // Initialise control mode
+            applyMode();
 
             // ====== Bots ======
             const BOT_COUNT = 8;
@@ -325,8 +753,7 @@
             const bullets = [];
             const particles = [];
             function spawnBullet(origin, dir, from) {
-                // dispersion (minutes of angle approx)
-                const spread = from === "player" ? 0.0035 : 0.0055; // radians
+                const spread = from === "player" ? 0.0035 : 0.0055;
                 const rand = new THREE.Euler((Math.random() - 0.5) * spread, (Math.random() - 0.5) * spread, 0);
                 const dir2 = dir.clone().applyEuler(rand).normalize();
                 const geo = new THREE.SphereGeometry(0.09, 6, 6);
@@ -369,7 +796,7 @@
                     state.landed = true;
                     state.hp = Math.min(100, state.hp + 25 * dt);
                     if (state.hp >= 100) state.ammo = Math.min(400, state.ammo + 80 * dt);
-                    const rate = enemiesNearby ? 6 : 18; // contest slows capture
+                    const rate = enemiesNearby ? 6 : 18;
                     captureProgress = Math.min(100, captureProgress + rate * dt);
                 } else {
                     state.landed = false;
@@ -383,29 +810,55 @@
             function drawHUD() {
                 const spd = state.vel.length();
                 const n = loadFactorFromBank(bankAngleZ(player));
+                const mode = resolveInputMode();
+                let modeLabel = mode;
+                if (mode === "desktop") modeLabel += `(${desktopSubmode})`;
                 hud.innerHTML =
                     `<div class="row"><b>Spd:</b> ${spd.toFixed(1)} m/s &nbsp; <b>Thr:</b> ${(state.throttle * 100) | 0}% &nbsp; <b>HP:</b> ${state.hp | 0} &nbsp; <b>Ammo:</b> ${state.ammo | 0} &nbsp; <b>Jam:</b> ${state.jam > 0 ? state.jam.toFixed(1) + "s" : "—"} &nbsp; <b>Score:</b> ${state.score}</div>` +
-                    `<div class="row"><b>Bots:</b> ${bots.filter((b) => b.userData.hp > 0).length}/${BOT_COUNT} &nbsp; <b>n(load):</b> ${n.toFixed(2)} &nbsp; <b>Capture:</b> ${captureProgress.toFixed(0)}%</div>`;
+                    `<div class="row"><b>Bots:</b> ${bots.filter((b) => b.userData.hp > 0).length}/${BOT_COUNT} &nbsp; <b>n(load):</b> ${n.toFixed(2)} &nbsp; <b>Capture:</b> ${captureProgress.toFixed(0)}% &nbsp; <b>Input:</b> ${modeLabel}</div>`;
             }
 
             // ====== Player Physics & Controls ======
             let fireTimer = 0;
             let respawnTimer = 0.5;
             function updatePlayer(dt) {
-                // Throttle
-                if (keys["KeyW"]) state.throttle = Math.min(1, state.throttle + 0.45 * dt);
-                if (keys["KeyS"]) state.throttle = Math.max(0, state.throttle - 0.45 * dt);
+                const mode = resolveInputMode();
 
-                // Mouse yaw/pitch
-                const yawMouse = mouse.dx * mouse.sens;
-                const pitchMouse = mouse.dy * mouse.sens;
-                mouse.dx = 0;
-                mouse.dy = 0;
-                const yawIn = (keys["ArrowLeft"] ? -1 : 0) + (keys["ArrowRight"] ? 1 : 0) + yawMouse * 2.0;
-                const pitchIn = (keys["ArrowUp"] ? 1 : 0) + (keys["ArrowDown"] ? -1 : 0) + -pitchMouse * 1.8;
-                const rollIn = (keys["KeyQ"] ? -1 : 0) + (keys["KeyE"] ? 1 : 0) + yawMouse * 0.6; // auto-bank with yaw
+                // Throttle from keys (W/S) and from touch slider
+                if (mode !== "touch") {
+                    if (keys["KeyW"]) state.throttle = Math.min(1, state.throttle + 0.45 * dt);
+                    if (keys["KeyS"]) state.throttle = Math.max(0, state.throttle - 0.45 * dt);
+                }
 
-                // Control authority scales with damage
+                // Inputs
+                let yawIn = 0,
+                    pitchIn = 0,
+                    rollIn = 0;
+                let fireIn = false;
+
+                if (mode === "desktop") {
+                    const yawMouse = mouse.dx * mouse.sens;
+                    const pitchMouse = mouse.dy * mouse.sens;
+                    mouse.dx = 0;
+                    mouse.dy = 0;
+                    yawIn = (keys["ArrowLeft"] ? -1 : 0) + (keys["ArrowRight"] ? 1 : 0) + yawMouse * 2.0;
+                    pitchIn = (keys["ArrowUp"] ? 1 : 0) + (keys["ArrowDown"] ? -1 : 0) + -pitchMouse * 1.8;
+                    rollIn = (keys["KeyQ"] ? -1 : 0) + (keys["KeyE"] ? 1 : 0) + yawMouse * 0.6;
+                    fireIn = !!keys["Space"];
+                } else if (mode === "keyboard") {
+                    yawIn = (keys["ArrowLeft"] ? -1 : 0) + (keys["ArrowRight"] ? 1 : 0);
+                    pitchIn = (keys["ArrowUp"] ? 1 : 0) + (keys["ArrowDown"] ? -1 : 0);
+                    rollIn = (keys["KeyQ"] ? -1 : 0) + (keys["KeyE"] ? 1 : 0);
+                    fireIn = !!keys["Space"];
+                } else {
+                    // touch
+                    yawIn = touchAxes.x * 1.8; // stronger yaw from stick
+                    pitchIn = -touchAxes.y * 1.6; // up on stick -> pitch up
+                    rollIn = (touchRollR ? 1 : 0) + (touchRollL ? -1 : 0);
+                    fireIn = touchFire;
+                }
+
+                // Authority scales with damage
                 const controlScale = 0.6 + 0.4 * (state.hp / 100);
                 player.rotation.y += THREE.MathUtils.clamp(yawIn, -1, 1) * 1.0 * dt * controlScale;
                 player.rotation.z += THREE.MathUtils.clamp(-rollIn, -1, 1) * 2.0 * dt * controlScale;
@@ -413,30 +866,22 @@
 
                 // Aerodynamics
                 const fwd = forwardOf(player);
-                const thrustScale = 0.6 + 0.4 * (state.hp / 100); // engine damage reduces thrust
+                const thrustScale = 0.6 + 0.4 * (state.hp / 100);
                 const thrust = fwd.clone().multiplyScalar(state.maxThrust * state.throttle * thrustScale);
-
                 const v = state.vel;
                 const drag = v.clone().multiplyScalar(-state.dragCoef * v.length());
-
-                // Lift with load factor from bank angle
                 const n = loadFactorFromBank(bankAngleZ(player));
                 const up = new THREE.Vector3(0, 1, 0).applyQuaternion(player.quaternion);
                 const liftMag = state.liftCoef * Math.max(0, v.length()) * n;
                 const lift = up.multiplyScalar(liftMag);
-
-                // Gravity
                 const gravity = new THREE.Vector3(0, -9.8, 0);
-
                 v.add(thrust.add(drag).add(lift).add(gravity).multiplyScalar(dt));
 
-                // Stall model: stall threshold increases with sqrt(n)
                 const stallV = state.baseStall * Math.sqrt(n);
                 if (v.length() < stallV && player.rotation.x < -0.25) {
                     v.y -= (stallV - v.length()) * 1.8 * dt;
                 }
 
-                // Ground collision
                 player.position.add(v.clone().multiplyScalar(dt));
                 if (player.position.y < 0.5) {
                     player.position.y = 0.5;
@@ -445,8 +890,8 @@
                     v.z *= 0.98;
                 }
 
-                // Guns: jam mechanic and ROF
-                if (keys["Space"] && state.ammo > 0 && state.jam <= 0) {
+                // Firing
+                if (fireIn && state.ammo > 0 && state.jam <= 0) {
                     fireTimer -= dt;
                     if (fireTimer <= 0) {
                         const f = forwardOf(player);
@@ -456,8 +901,7 @@
                             .add(new THREE.Vector3(0, 0.3, 0));
                         spawnBullet(muzzle, f, "player");
                         state.ammo -= 1;
-                        fireTimer = 0.05; // 20 rps
-                        // small chance to jam if overheating
+                        fireTimer = 0.05;
                         if (Math.random() < 0.002) {
                             state.jam = 2.0;
                         }
@@ -467,13 +911,11 @@
                 }
                 if (state.jam > 0) state.jam = Math.max(0, state.jam - dt);
 
-                // Damage feedback: smoke when hurt
                 if (state.hp < 40 && Math.random() < 0.2) {
                     const back = player.position.clone().add(fwd.clone().multiplyScalar(-2));
                     spawnSmoke(back, v.clone().multiplyScalar(0.02), 0.8);
                 }
 
-                // Respawn
                 if (state.hp <= 0) {
                     respawnTimer -= dt;
                     if (respawnTimer <= 0) {
@@ -486,7 +928,6 @@
                     }
                 }
 
-                // Prop visuals
                 if (player.userData.prop) player.userData.prop.rotation.x += (20 + 80 * state.throttle) * dt;
             }
 
@@ -502,7 +943,6 @@
                     d.thinkCooldown -= dt;
                     d.fireCd -= dt;
                     if (d.thinkCooldown <= 0) {
-                        // Steering towards predicted lead point
                         const toP = player.position.clone().sub(b.position);
                         const bulletSpeed = 185;
                         const dist = toP.length();
@@ -515,11 +955,9 @@
                         b.rotation.y += THREE.MathUtils.clamp(yawDelta, -0.8 * dt, 0.8 * dt);
                         const dy = player.position.y - b.position.y;
                         b.rotation.x += THREE.MathUtils.clamp(-dy * 0.002, -0.6 * dt, 0.6 * dt);
-                        // keep some bank
                         b.rotation.z += THREE.MathUtils.clamp((Math.random() - 0.5) * 0.8 * dt, -0.8 * dt, 0.8 * dt);
                         d.thinkCooldown = 0.02;
                     }
-                    // Energy & thrust
                     const fwd = forwardOf(b);
                     const thrust = fwd.clone().multiplyScalar(36 * d.throttle);
                     d.vel.add(thrust.multiplyScalar(dt));
@@ -533,7 +971,6 @@
                         d.vel.z *= 0.98;
                     }
 
-                    // Fire if aligned
                     const toP2 = player.position.clone().sub(b.position);
                     const dist2 = toP2.length();
                     if (dist2 < 380) {
@@ -546,7 +983,6 @@
                         }
                     }
 
-                    // Smoke when damaged
                     if (d.hp < 35 && Math.random() < 0.15) {
                         const back = b.position.clone().add(forwardOf(b).multiplyScalar(-2));
                         spawnSmoke(back, d.vel.clone().multiplyScalar(0.02), 0.8);
@@ -656,23 +1092,19 @@
                     "Runway bounds outside false",
                 );
                 logTest("Runway bounds outside");
-                // Load factor tests
                 const n0 = loadFactorFromBank(0),
                     n60 = loadFactorFromBank(Math.PI / 3);
                 console.assert(Math.abs(n0 - 1) < 1e-6, "n(0)=1");
                 console.assert(Math.abs(n60 - 2) < 0.05, "n(60°)≈2");
                 logTest("Load factor checks");
-                // Stall scaling monotonic
                 const s0 = 12 * Math.sqrt(n0),
                     s60 = 12 * Math.sqrt(n60);
                 console.assert(s60 > s0, "stall increases with bank");
                 logTest("Stall scaling");
-                // Renderer & camera exists
                 console.assert(renderer instanceof THREE.WebGLRenderer, "renderer ok");
                 logTest("Renderer present");
                 console.assert(camera instanceof THREE.PerspectiveCamera, "camera ok");
                 logTest("Camera present");
-                // wrapAngle contract
                 const wa = ((a) => {
                     while (a > Math.PI) a -= Math.PI * 2;
                     while (a < -Math.PI) a += Math.PI * 2;
@@ -680,6 +1112,37 @@
                 })(4 * Math.PI);
                 console.assert(wa >= -Math.PI && wa <= Math.PI, "wrapAngle range");
                 logTest("wrapAngle range");
+                // Input capability tests (additive)
+                console.assert(typeof supportsPointerLock === "boolean", "PointerLock support flag is boolean");
+                logTest("PointerLock flag");
+                console.assert(
+                    ["auto", "desktop", "touch", "keyboard"].includes(controlSelect.value),
+                    "Control picker present",
+                );
+                logTest("Control picker");
+                console.assert(
+                    resolveInputMode() === "desktop" ||
+                        resolveInputMode() === "touch" ||
+                        resolveInputMode() === "keyboard",
+                    "Resolved mode valid",
+                );
+                logTest("Resolved mode");
+                // NEW: pointer-lock safe wrapper
+                let plOK = false;
+                try {
+                    plOK = safeRequestPointerLock();
+                } catch (e) {
+                    plOK = "threw";
+                }
+                console.assert(
+                    plOK === true || plOK === false,
+                    "safeRequestPointerLock returns boolean and does not throw",
+                );
+                logTest("safeRequestPointerLock wrapper");
+                if (resolveInputMode() === "desktop") {
+                    console.assert(["pl", "drag"].includes(desktopSubmode), "desktop submode valid");
+                    logTest("Desktop submode: " + desktopSubmode);
+                }
                 logTest("Self-tests passed.");
             } catch (e) {
                 logTest("Self-tests failed: " + e.message, false);
