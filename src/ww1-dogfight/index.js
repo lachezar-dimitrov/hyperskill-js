@@ -2,27 +2,7 @@
 // Refactor: modularised structure, config centralisation, deduped helpers, strategy-based input.
 // Public API preserved for existing tests: THREE, forwardOf, inRunwayBounds, resolveInputMode,
 // safeRequestPointerLock, desktopSubmode, renderer, camera, runwayLen, runwayWid.
-
-// =========================
-// Config & Constants
-// =========================
-const CFG = Object.freeze({
-    world: { size: 5000, runwayLen: 700, runwayWid: 70, treeCount: 120 },
-    physics: { gravity: -9.8, dragCoef: 0.012, liftCoef: 0.085, baseStall: 12, playerMaxThrust: 40, botThrust: 36 },
-    damage: { playerHit: 15, botHit: 20, smokeHP: 40, botSmokeHP: 35 },
-    guns: {
-        rof: 0.05,
-        bulletSpeed: 185,
-        spreadPlayer: 0.0035,
-        spreadBot: 0.0055,
-        jamChance: 0.002,
-        jamCd: 2.0,
-        botFireCd: 0.06,
-    },
-    ai: { count: 8, thinkDt: 0.02, fireDist: 380, aimCos: 0.985 },
-    land: { minSpeed: 6, align: 0.2, groundY: 0.5, captureRate: { clear: 18, contested: 6 }, decay: 4 },
-    camera: { back: 13, up: 4, lookAhead: 10, lerpT: 0.001 },
-});
+import 
 
 // =========================
 // Loader & Diagnostics
@@ -348,7 +328,7 @@ function enableDesktopDragFallback(notify = false) {
 function setupDesktop() {
     if (supportsPointerLock) {
         hint.textContent =
-            "Desktop: click to lock pointer; move mouse to yaw/pitch. ←/→ roll, Q/E yaw (rudder). PgUp nose down, PgDn nose up. ESC unlocks.";
+            "Desktop: click to lock pointer; move mouse to yaw/pitch. ←/→ roll, Q/E yaw (rudder), ↑/↓ pitch (also PgUp/PgDn), R/F throttle. ESC unlocks.";
         document.addEventListener("pointerlockchange", () => {
             if (document.pointerLockElement === canvas) {
                 desktopSubmode = "pl";
@@ -491,7 +471,7 @@ function applyMode() {
     if (mode === "desktop") setupDesktop();
     else if (mode === "touch") setupTouch();
     else {
-        hint.textContent = "Keyboard-only: ←/→ roll, Q/E yaw, PgUp nose down, PgDn nose up, W/S throttle, Space fire";
+        hint.textContent = "Keyboard-only: ←/→ roll, Q/E yaw, ↑/↓ pitch (PgUp/PgDn too), R/F throttle, Space fire";
         touchUI.hidden = true;
     }
 }
@@ -585,6 +565,8 @@ const movementKeys = {
     arrow: {
         right: "ArrowRight",
         left: "ArrowLeft",
+        up: "ArrowUp",
+        down: "ArrowDown",
     },
 };
 
@@ -636,10 +618,11 @@ function sampleInputs(mode) {
         // Yaw: Q/E
         yaw += (keys["KeyE"] ? 1 : 0) - (keys["KeyQ"] ? 1 : 0);
 
-        // Pitch: W/S and PageUp/PageDown.
+        // Pitch: W/S, ArrowUp/ArrowDown and PageUp/PageDown.
         // Convention here: positive pitch input = nose DOWN.
         // So: S (nose up) -> negative; PageDown (nose up) -> negative.
         pitch += (keys["KeyW"] ? 1 : 0) - (keys["KeyS"] ? 1 : 0);
+        pitch += (keys[movementKeys.arrow.down] ? 1 : 0) - (keys[movementKeys.arrow.up] ? 1 : 0);
         pitch += (keys["PageUp"] ? 1 : 0) - (keys["PageDown"] ? 1 : 0);
 
         // --- Mouse (dx → yaw, dy → pitch). Mouse UP = nose UP (negative input) ---
@@ -657,7 +640,8 @@ function sampleInputs(mode) {
         roll = (keys[movementKeys.arrow.right] ? 1 : 0) - (keys[movementKeys.arrow.left] ? 1 : 0);
         yaw = (keys["KeyE"] ? 1 : 0) - (keys["KeyQ"] ? 1 : 0);
         pitch = (keys["KeyW"] ? 1 : 0) - (keys["KeyS"] ? 1 : 0);
-        pitch += (keys["PageDown"] ? 1 : 0) - (keys["PageUp"] ? 1 : 0);
+        pitch += (keys[movementKeys.arrow.down] ? 1 : 0) - (keys[movementKeys.arrow.up] ? 1 : 0);
+        pitch += (keys["PageUp"] ? 1 : 0) - (keys["PageDown"] ? 1 : 0);
         fire = !!keys["Space"];
     } else {
         // touch
