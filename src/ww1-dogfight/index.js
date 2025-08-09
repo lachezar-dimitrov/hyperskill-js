@@ -1,5 +1,32 @@
 // Extracted from index.html inline <script type="module">
-// ----- Load Three.js as ESM with CDN fallbacks -----
+// Refactor: modularised structure, config centralisation, deduped helpers, strategy-based input.
+// Public API preserved for existing tests: THREE, forwardOf, inRunwayBounds, resolveInputMode,
+// safeRequestPointerLock, desktopSubmode, renderer, camera, runwayLen, runwayWid.
+
+// =========================
+// Config & Constants
+// =========================
+const CFG = Object.freeze({
+    world: { size: 5000, runwayLen: 700, runwayWid: 70, treeCount: 120 },
+    physics: { gravity: -9.8, dragCoef: 0.012, liftCoef: 0.085, baseStall: 12, playerMaxThrust: 40, botThrust: 36 },
+    damage: { playerHit: 15, botHit: 20, smokeHP: 40, botSmokeHP: 35 },
+    guns: {
+        rof: 0.05,
+        bulletSpeed: 185,
+        spreadPlayer: 0.0035,
+        spreadBot: 0.0055,
+        jamChance: 0.002,
+        jamCd: 2.0,
+        botFireCd: 0.06,
+    },
+    ai: { count: 8, thinkDt: 0.02, fireDist: 380, aimCos: 0.985 },
+    land: { minSpeed: 6, align: 0.2, groundY: 0.5, captureRate: { clear: 18, contested: 6 }, decay: 4 },
+    camera: { back: 13, up: 4, lookAhead: 10, lerpT: 0.001 },
+});
+
+// =========================
+// Loader & Diagnostics
+// =========================
 async function loadThree() {
     const cdns = [
         "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
@@ -32,38 +59,36 @@ try {
     throw e;
 }
 
-// ====== Scene & Renderer ======
+// =========================
+// Scene Graph
+// =========================
 const scene = new THREE.Scene();
-const skyTop = new THREE.Color(0x6aa0d8),
-    skyBottom = new THREE.Color(0x102030);
-scene.background = skyBottom.clone();
+scene.background = new THREE.Color(0x102030);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 2500);
-
-const hemi = new THREE.HemisphereLight(0xcde6ff, 0x223344, 0.9);
-scene.add(hemi);
+scene.add(new THREE.HemisphereLight(0xcde6ff, 0x223344, 0.9));
 const sun = new THREE.DirectionalLight(0xfff7e0, 1.0);
 sun.position.set(200, 300, 150);
 scene.add(sun);
 
-// ====== Terrain ======
-const groundGeo = new THREE.PlaneGeometry(5000, 5000, 64, 64);
+// Ground & Runway
+const { size, runwayLen, runwayWid, treeCount } = CFG.world;
+const groundGeo = new THREE.PlaneGeometry(size, size, 64, 64);
 groundGeo.rotateX(-Math.PI / 2);
-const groundMat = new THREE.MeshStandardMaterial({ color: 0x2a4b33, roughness: 1, metalness: 0 });
-const ground = new THREE.Mesh(groundGeo, groundMat);
+const ground = new THREE.Mesh(
+    groundGeo,
+    new THREE.MeshStandardMaterial({ color: 0x2a4b33, roughness: 1, metalness: 0 }),
+);
 ground.receiveShadow = true;
 scene.add(ground);
 
-const runwayLen = 700,
-    runwayWid = 70;
 const runwayGeo = new THREE.PlaneGeometry(runwayLen, runwayWid);
 runwayGeo.rotateX(-Math.PI / 2);
-const runwayMat = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.8 });
-const runway = new THREE.Mesh(runwayGeo, runwayMat);
+const runway = new THREE.Mesh(runwayGeo, new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.8 }));
 runway.position.set(0, 0.01, 0);
 scene.add(runway);
 
@@ -76,15 +101,23 @@ for (let i = -runwayLen / 2 + 40; i < runwayLen / 2; i += 60) {
 }
 
 const treeMat = new THREE.MeshStandardMaterial({ color: 0x3f4d3f, roughness: 0.9 });
-for (let i = 0; i < 120; i++) {
-    const tree = new THREE.Mesh(new THREE.ConeGeometry(6 + Math.random() * 10, 28 + Math.random() * 30, 7), treeMat);
-    const angle = Math.random() * Math.PI * 2;
-    const radius = 700 + Math.random() * 1800;
-    tree.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
-    scene.add(tree);
+for (let i = 0; i < treeCount; i++) {
+    const t = new THREE.Mesh(new THREE.ConeGeometry(6 + Math.random() * 10, 28 + Math.random() * 30, 7), treeMat);
+    const ang = Math.random() * Math.PI * 2,
+        r = 700 + Math.random() * 1800;
+    t.position.set(Math.cos(ang) * r, 0, Math.sin(ang) * r);
+    scene.add(t);
 }
 
-// ====== Helpers ======
+// =========================
+// Utils
+// =========================
+const V = {
+    tmp1: new THREE.Vector3(),
+    tmp2: new THREE.Vector3(),
+    tmp3: new THREE.Vector3(),
+    clamp01: (x) => Math.max(0, Math.min(1, x)),
+};
 function forwardOf(obj) {
     return new THREE.Vector3(1, 0, 0).applyQuaternion(obj.quaternion);
 }
@@ -95,8 +128,15 @@ function loadFactorFromBank(phi) {
     const c = Math.cos(phi);
     return 1 / Math.max(0.1, c);
 }
+function wrapAngle(a) {
+    while (a > Math.PI) a -= Math.PI * 2;
+    while (a < -Math.PI) a += Math.PI * 2;
+    return a;
+}
 
-// ====== Plane Factory ======
+// =========================
+// Factories
+// =========================
 function makePlane(color = 0xbcc6cc) {
     const group = new THREE.Group();
     const fus = new THREE.Mesh(
@@ -133,69 +173,66 @@ function makePlane(color = 0xbcc6cc) {
     return group;
 }
 
-// ====== Player & State ======
-const player = makePlane(0xcfe3ee);
-scene.add(player);
-player.position.set(-200, 40, -200);
-
+// =========================
+// Game State
+// =========================
 const state = {
+    player: null,
     throttle: 0.55,
-    maxThrust: 40,
-    dragCoef: 0.012,
-    liftCoef: 0.085,
-    baseStall: 12,
     vel: new THREE.Vector3(),
     hp: 100,
     ammo: 400,
     jam: 0,
     score: 0,
     landed: false,
+    fireTimer: 0,
+    respawnTimer: 0.5,
 };
 
-// ====== Input System (Desktop/Touch/Keyboard-only) ======
-const keys = {};
-addEventListener("keydown", (e) => {
-    keys[e.code] = true;
-});
-addEventListener("keyup", (e) => {
-    keys[e.code] = false;
-});
+const entities = { bots: [], bullets: [], particles: [] };
+state.player = makePlane(0xcfe3ee);
+scene.add(state.player);
+state.player.position.set(-200, 40, -200);
 
+// =========================
+// Input (strategy-based)
+// =========================
+const keys = {};
+addEventListener("keydown", (e) => (keys[e.code] = true));
+addEventListener("keyup", (e) => (keys[e.code] = false));
 const canvas = renderer.domElement;
 const hint = document.getElementById("hint");
 const controlSelect = document.getElementById("controlSelect");
 const recenterBtn = document.getElementById("recenterBtn");
-
-// Capability detection
 const supportsPointerLock = typeof canvas.requestPointerLock === "function" && "pointerLockElement" in document;
 const hasTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
-
-// Submode for desktop: 'pl' (pointer lock) | 'drag'
-let desktopSubmode = supportsPointerLock ? "pl" : "drag";
-
-// Input vectors (aggregated per frame)
+let desktopSubmode = supportsPointerLock ? "pl" : "drag"; // public
 const mouse = { dx: 0, dy: 0, sens: 0.0016 };
-const touchAxes = { x: 0, y: 0 }; // -1..1 from joystick
-let touchFire = false;
-let touchRollL = false,
+const touchAxes = { x: 0, y: 0 };
+let touchFire = false,
+    touchRollL = false,
     touchRollR = false;
 let selectedMode = "auto";
+const touchUI = document.getElementById("touchUI");
+const stick = document.getElementById("stick"),
+    stickNub = document.getElementById("stickNub");
+const throttleEl = document.getElementById("throttle"),
+    throttleKnob = document.getElementById("throttleKnob");
+const fireBtn = document.getElementById("fireBtn"),
+    rollLBtn = document.getElementById("rollL"),
+    rollRBtn = document.getElementById("rollR");
 
 function resolveInputMode() {
     if (selectedMode === "desktop") return "desktop";
     if (selectedMode === "touch") return "touch";
     if (selectedMode === "keyboard") return "keyboard";
-    // auto
     return hasTouch ? "touch" : "desktop";
 }
-
-controlSelect.addEventListener("change", () => {
+controlSelect?.addEventListener("change", () => {
     selectedMode = controlSelect.value;
     applyMode();
 });
-recenterBtn.addEventListener("click", () => {
-    setStick(0, 0, true);
-});
+recenterBtn?.addEventListener("click", () => setStick(0, 0, true));
 
 function safeRequestPointerLock() {
     if (!supportsPointerLock) return false;
@@ -203,15 +240,13 @@ function safeRequestPointerLock() {
         canvas.requestPointerLock();
         return true;
     } catch (e) {
-        // SecurityError in sandboxed frames without allow-pointer-lock
         console.warn("PointerLock blocked or failed:", e);
         return false;
     }
 }
 
-// Desktop pointer lock OR drag fallback
 function enableDesktopDragFallback(notify = false) {
-    if (desktopSubmode === "drag") return; // already active
+    if (desktopSubmode === "drag") return;
     desktopSubmode = "drag";
     const drag = { active: false, lastX: 0, lastY: 0 };
     canvas.onmousedown = (e) => {
@@ -219,12 +254,8 @@ function enableDesktopDragFallback(notify = false) {
         drag.lastX = e.clientX;
         drag.lastY = e.clientY;
     };
-    addEventListener("mouseup", () => {
-        drag.active = false;
-    });
-    addEventListener("mouseleave", () => {
-        drag.active = false;
-    });
+    addEventListener("mouseup", () => (drag.active = false));
+    addEventListener("mouseleave", () => (drag.active = false));
     addEventListener("mousemove", (e) => {
         if (drag.active) {
             mouse.dx += e.clientX - drag.lastX;
@@ -247,18 +278,14 @@ function setupDesktop() {
             if (document.pointerLockElement === canvas) {
                 desktopSubmode = "pl";
             } else {
-                // If lock lost (ESC), stay in desktop mode; user can re-lock or drag
                 if (desktopSubmode !== "drag") desktopSubmode = "pl";
             }
         });
-        document.addEventListener("pointerlockerror", () => {
-            enableDesktopDragFallback(true);
-        });
+        document.addEventListener("pointerlockerror", () => enableDesktopDragFallback(true));
         canvas.onclick = () => {
             const ok = safeRequestPointerLock();
             if (!ok) enableDesktopDragFallback(true);
         };
-        // Also collect deltas when locked
         addEventListener("mousemove", (e) => {
             if (document.pointerLockElement === canvas) {
                 mouse.dx += e.movementX;
@@ -268,30 +295,19 @@ function setupDesktop() {
     } else {
         enableDesktopDragFallback(false);
     }
-    document.getElementById("touchUI").hidden = true;
+    touchUI.hidden = true;
 }
 
-// Touch UI setup
-const touchUI = document.getElementById("touchUI");
-const stick = document.getElementById("stick");
-const stickNub = document.getElementById("stickNub");
-const throttle = document.getElementById("throttle");
-const throttleKnob = document.getElementById("throttleKnob");
-const fireBtn = document.getElementById("fireBtn");
-const rollLBtn = document.getElementById("rollL");
-const rollRBtn = document.getElementById("rollR");
-
-function setStick(nx, ny, immediate = false) {
-    // clamp -1..1
-    const x = Math.max(-1, Math.min(1, nx));
-    const y = Math.max(-1, Math.min(1, ny));
+function setStick(nx, ny) {
+    const x = Math.max(-1, Math.min(1, nx)),
+        y = Math.max(-1, Math.min(1, ny));
     touchAxes.x = x;
     touchAxes.y = y;
-    const r = stick.clientWidth / 2;
-    const cx = r,
+    const r = stick.clientWidth / 2,
+        cx = r,
         cy = r;
-    const px = cx + x * (r - 32);
-    const py = cy + y * (r - 32);
+    const px = cx + x * (r - 32),
+        py = cy + y * (r - 32);
     stickNub.style.left = px - 32 + "px";
     stickNub.style.top = py - 32 + "px";
 }
@@ -300,22 +316,20 @@ function setupTouch() {
     hint.textContent = "Touch: left joystick = yaw/pitch, right slider = throttle, ● = fire, ⟲/⟳ = roll";
     touchUI.hidden = false;
     // Joystick
-    const state = { id: null, cx: 0, cy: 0, r: 0 };
+    const js = { id: null, cx: 0, cy: 0, r: 0 };
     const start = (x, y, id) => {
         const rect = stick.getBoundingClientRect();
-        state.cx = rect.left + rect.width / 2;
-        state.cy = rect.top + rect.height / 2;
-        state.r = Math.min(rect.width, rect.height) / 2;
-        state.id = id;
+        js.cx = rect.left + rect.width / 2;
+        js.cy = rect.top + rect.height / 2;
+        js.r = Math.min(rect.width, rect.height) / 2;
+        js.id = id;
     };
     const move = (x, y) => {
-        if (state.id == null) return;
-        const dx = (x - state.cx) / state.r;
-        const dy = (y - state.cy) / state.r;
-        setStick(dx, dy);
+        if (js.id == null) return;
+        setStick((x - js.cx) / js.r, (y - js.cy) / js.r);
     };
     const end = () => {
-        state.id = null;
+        js.id = null;
         setStick(0, 0, true);
     };
     stick.ontouchstart = (e) => {
@@ -326,22 +340,21 @@ function setupTouch() {
     };
     stick.ontouchmove = (e) => {
         for (const t of e.changedTouches) {
-            if (state.id === t.identifier) move(t.clientX, t.clientY);
+            if (js.id === t.identifier) move(t.clientX, t.clientY);
         }
         e.preventDefault();
     };
     stick.ontouchend = (e) => {
         for (const t of e.changedTouches) {
-            if (state.id === t.identifier) end();
+            if (js.id === t.identifier) end();
         }
         e.preventDefault();
     };
     stick.ontouchcancel = stick.ontouchend;
-
-    // Throttle slider (0..1 from bottom to top)
+    // Throttle slider
     const ts = { id: null, top: 0, bottom: 0 };
     const tStart = (y, id) => {
-        const r = throttle.getBoundingClientRect();
+        const r = throttleEl.getBoundingClientRect();
         ts.top = r.top;
         ts.bottom = r.bottom;
         ts.id = id;
@@ -355,38 +368,26 @@ function setupTouch() {
     const tEnd = () => {
         ts.id = null;
     };
-    throttle.ontouchstart = (e) => {
+    throttleEl.ontouchstart = (e) => {
         const t = e.changedTouches[0];
         tStart(t.clientY, t.identifier);
         tMove(t.clientY);
         e.preventDefault();
     };
-    throttle.ontouchmove = (e) => {
+    throttleEl.ontouchmove = (e) => {
         for (const t of e.changedTouches) {
             if (ts.id === t.identifier) tMove(t.clientY);
         }
         e.preventDefault();
     };
-    throttle.ontouchend = (e) => {
+    throttleEl.ontouchend = (e) => {
         for (const t of e.changedTouches) {
             if (ts.id === t.identifier) tEnd();
         }
         e.preventDefault();
     };
-    throttle.ontouchcancel = throttle.ontouchend;
-
-    // Fire button
-    fireBtn.ontouchstart = (e) => {
-        touchFire = true;
-        e.preventDefault();
-    };
-    fireBtn.ontouchend = (e) => {
-        touchFire = false;
-        e.preventDefault();
-    };
-    fireBtn.ontouchcancel = fireBtn.ontouchend;
-
-    // Roll buttons
+    throttleEl.ontouchcancel = throttleEl.ontouchend;
+    // Fire + Roll
     const setHold = (btn, setter) => {
         btn.ontouchstart = (e) => {
             setter(true);
@@ -398,40 +399,37 @@ function setupTouch() {
         };
         btn.ontouchcancel = btn.ontouchend;
     };
+    setHold(fireBtn, (v) => (touchFire = v));
     setHold(rollLBtn, (v) => (touchRollL = v));
     setHold(rollRBtn, (v) => (touchRollR = v));
 }
 
 function stateSetThrottle(frac) {
-    state.throttle = Math.max(0, Math.min(1, frac));
-    const h = throttle.clientHeight - throttleKnob.clientHeight;
+    state.throttle = V.clamp01(frac);
+    const h = throttleEl.clientHeight - throttleKnob.clientHeight;
     throttleKnob.style.transform = `translateY(${(1 - state.throttle) * h}px)`;
 }
 
 function applyMode() {
     const mode = resolveInputMode();
-    controlSelect.value = selectedMode;
-    if (mode === "desktop") {
-        setupDesktop();
-    } else if (mode === "touch") {
-        setupTouch();
-    } else {
-        // keyboard
+    controlSelect && (controlSelect.value = selectedMode);
+    if (mode === "desktop") setupDesktop();
+    else if (mode === "touch") setupTouch();
+    else {
         hint.textContent = "Keyboard-only: arrows = yaw/pitch, Q/E roll, W/S throttle, Space fire";
-        document.getElementById("touchUI").hidden = true;
+        touchUI.hidden = true;
     }
 }
 
-// Initialise control mode
 applyMode();
 
-// ====== Bots ======
-const BOT_COUNT = 8;
-const bots = [];
-for (let i = 0; i < BOT_COUNT; i++) {
+// =========================
+// Entities – Bots, Projectiles, Particles
+// =========================
+for (let i = 0; i < CFG.ai.count; i++) {
     const b = makePlane(0xd37f7f);
     scene.add(b);
-    const ang = i * ((Math.PI * 2) / BOT_COUNT);
+    const ang = i * ((Math.PI * 2) / CFG.ai.count);
     b.position.set(Math.cos(ang) * 400 - 200, 60 + Math.random() * 30, Math.sin(ang) * 400);
     b.rotation.y = Math.random() * Math.PI * 2;
     b.userData = {
@@ -440,38 +438,38 @@ for (let i = 0; i < BOT_COUNT; i++) {
         hp: 70,
         thinkCooldown: 0,
         fireCd: 0,
-        target: player,
+        target: state.player,
     };
-    bots.push(b);
+    entities.bots.push(b);
 }
 
-// ====== Projectiles & Particles ======
-const bullets = [];
-const particles = [];
 function spawnBullet(origin, dir, from) {
-    const spread = from === "player" ? 0.0035 : 0.0055;
+    const spread = from === "player" ? CFG.guns.spreadPlayer : CFG.guns.spreadBot;
     const rand = new THREE.Euler((Math.random() - 0.5) * spread, (Math.random() - 0.5) * spread, 0);
     const dir2 = dir.clone().applyEuler(rand).normalize();
-    const geo = new THREE.SphereGeometry(0.09, 6, 6);
-    const mat = new THREE.MeshBasicMaterial({ color: from === "player" ? 0xffffff : 0xffd080 });
-    const m = new THREE.Mesh(geo, mat);
+    const m = new THREE.Mesh(
+        new THREE.SphereGeometry(0.09, 6, 6),
+        new THREE.MeshBasicMaterial({ color: from === "player" ? 0xffffff : 0xffd080 }),
+    );
     m.position.copy(origin);
-    m.userData = { vel: dir2.multiplyScalar(185), ttl: 1.1, from };
+    m.userData = { vel: dir2.multiplyScalar(CFG.guns.bulletSpeed), ttl: 1.1, from };
     scene.add(m);
-    bullets.push(m);
+    entities.bullets.push(m);
 }
-
 function spawnSmoke(pos, vel, life = 1.2) {
-    const geo = new THREE.SphereGeometry(0.4, 6, 6);
-    const mat = new THREE.MeshBasicMaterial({ color: 0x555555, transparent: true, opacity: 0.7 });
-    const s = new THREE.Mesh(geo, mat);
+    const s = new THREE.Mesh(
+        new THREE.SphereGeometry(0.4, 6, 6),
+        new THREE.MeshBasicMaterial({ color: 0x555555, transparent: true, opacity: 0.7 }),
+    );
     s.position.copy(pos);
     s.userData = { vel: vel.clone().add(new THREE.Vector3(0, 0.5, 0)), ttl: life };
     scene.add(s);
-    particles.push(s);
+    entities.particles.push(s);
 }
 
-// ====== Runway Capture / Repair ======
+// =========================
+// Gameplay Systems
+// =========================
 let captureProgress = 0;
 const capSpan = document.getElementById("capPct");
 function inRunwayBounds(pos) {
@@ -480,56 +478,47 @@ function inRunwayBounds(pos) {
 
 function handleLandingRepair(dt) {
     const speed = state.vel.length();
-    const onGround = player.position.y <= 1.1;
-    const aligned = Math.abs(player.rotation.z) < 0.2 && Math.abs(player.rotation.x) < 0.2;
-    const enemiesNearby = bots.some((b) => b.userData.hp > 0 && b.position.distanceTo(runway.position) < 120);
-    if (onGround && speed < 6 && inRunwayBounds(player.position) && aligned) {
+    const onGround = state.player.position.y <= 1.1;
+    const aligned =
+        Math.abs(state.player.rotation.z) < CFG.land.align && Math.abs(state.player.rotation.x) < CFG.land.align;
+    const enemiesNearby = entities.bots.some((b) => b.userData.hp > 0 && b.position.distanceTo(runway.position) < 120);
+    if (onGround && speed < CFG.land.minSpeed && inRunwayBounds(state.player.position) && aligned) {
         state.landed = true;
         state.hp = Math.min(100, state.hp + 25 * dt);
         if (state.hp >= 100) state.ammo = Math.min(400, state.ammo + 80 * dt);
-        const rate = enemiesNearby ? 6 : 18;
+        const rate = enemiesNearby ? CFG.land.captureRate.contested : CFG.land.captureRate.clear;
         captureProgress = Math.min(100, captureProgress + rate * dt);
     } else {
         state.landed = false;
-        captureProgress = Math.max(0, captureProgress - 4 * dt);
+        captureProgress = Math.max(0, captureProgress - CFG.land.decay * dt);
     }
     capSpan.textContent = captureProgress.toFixed(0) + "%";
 }
 
-// ====== HUD ======
-const hud = document.getElementById("hud");
 function drawHUD() {
+    const n = loadFactorFromBank(bankAngleZ(state.player));
     const spd = state.vel.length();
-    const n = loadFactorFromBank(bankAngleZ(player));
-    const mode = resolveInputMode();
-    let modeLabel = mode;
-    if (mode === "desktop") modeLabel += `(${desktopSubmode})`;
-    hud.innerHTML =
+    let mode = resolveInputMode();
+    if (mode === "desktop") mode += `(${desktopSubmode})`;
+    const botsAlive = entities.bots.filter((b) => b.userData.hp > 0).length;
+    document.getElementById("hud").innerHTML =
         `<div class="row"><b>Spd:</b> ${spd.toFixed(1)} m/s &nbsp; <b>Thr:</b> ${(state.throttle * 100) | 0}% &nbsp; <b>HP:</b> ${state.hp | 0} &nbsp; <b>Ammo:</b> ${state.ammo | 0} &nbsp; <b>Jam:</b> ${state.jam > 0 ? state.jam.toFixed(1) + "s" : "—"} &nbsp; <b>Score:</b> ${state.score}</div>` +
-        `<div class="row"><b>Bots:</b> ${bots.filter((b) => b.userData.hp > 0).length}/${BOT_COUNT} &nbsp; <b>n(load):</b> ${n.toFixed(2)} &nbsp; <b>Capture:</b> ${captureProgress.toFixed(0)}% &nbsp; <b>Input:</b> ${modeLabel}</div>`;
+        `<div class="row"><b>Bots:</b> ${botsAlive}/${CFG.ai.count} &nbsp; <b>n(load):</b> ${n.toFixed(2)} &nbsp; <b>Capture:</b> ${captureProgress.toFixed(0)}% &nbsp; <b>Input:</b> ${mode}</div>`;
 }
 
-// ====== Player Physics & Controls ======
-let fireTimer = 0;
-let respawnTimer = 0.5;
-function updatePlayer(dt) {
+function playerControls(dt) {
     const mode = resolveInputMode();
-
-    // Throttle from keys (W/S) and from touch slider
     if (mode !== "touch") {
         if (keys["KeyW"]) state.throttle = Math.min(1, state.throttle + 0.45 * dt);
         if (keys["KeyS"]) state.throttle = Math.max(0, state.throttle - 0.45 * dt);
     }
-
-    // Inputs
     let yawIn = 0,
         pitchIn = 0,
-        rollIn = 0;
-    let fireIn = false;
-
+        rollIn = 0,
+        fireIn = false;
     if (mode === "desktop") {
-        const yawMouse = mouse.dx * mouse.sens;
-        const pitchMouse = mouse.dy * mouse.sens;
+        const yawMouse = mouse.dx * mouse.sens,
+            pitchMouse = mouse.dy * mouse.sens;
         mouse.dx = 0;
         mouse.dy = 0;
         yawIn = (keys["ArrowLeft"] ? -1 : 0) + (keys["ArrowRight"] ? 1 : 0) + yawMouse * 2.0;
@@ -542,118 +531,107 @@ function updatePlayer(dt) {
         rollIn = (keys["KeyQ"] ? -1 : 0) + (keys["KeyE"] ? 1 : 0);
         fireIn = !!keys["Space"];
     } else {
-        // touch
-        yawIn = touchAxes.x * 1.8; // stronger yaw from stick
-        pitchIn = -touchAxes.y * 1.6; // up on stick -> pitch up
+        yawIn = touchAxes.x * 1.8;
+        pitchIn = -touchAxes.y * 1.6;
         rollIn = (touchRollR ? 1 : 0) + (touchRollL ? -1 : 0);
         fireIn = touchFire;
     }
-
-    // Authority scales with damage
     const controlScale = 0.6 + 0.4 * (state.hp / 100);
-    player.rotation.y += THREE.MathUtils.clamp(yawIn, -1, 1) * 1.0 * dt * controlScale;
-    player.rotation.z += THREE.MathUtils.clamp(-rollIn, -1, 1) * 2.0 * dt * controlScale;
-    player.rotation.x += THREE.MathUtils.clamp(-pitchIn, -1, 1) * 1.3 * dt * controlScale;
-
+    state.player.rotation.y += THREE.MathUtils.clamp(yawIn, -1, 1) * 1.0 * dt * controlScale;
+    state.player.rotation.z += THREE.MathUtils.clamp(-rollIn, -1, 1) * 2.0 * dt * controlScale;
+    state.player.rotation.x += THREE.MathUtils.clamp(-pitchIn, -1, 1) * 1.3 * dt * controlScale;
     // Aerodynamics
-    const fwd = forwardOf(player);
-    const thrustScale = 0.6 + 0.4 * (state.hp / 100);
-    const thrust = fwd.clone().multiplyScalar(state.maxThrust * state.throttle * thrustScale);
+    const fwd = forwardOf(state.player);
+    const thrust = fwd
+        .clone()
+        .multiplyScalar(CFG.physics.playerMaxThrust * state.throttle * (0.6 + 0.4 * (state.hp / 100)));
     const v = state.vel;
-    const drag = v.clone().multiplyScalar(-state.dragCoef * v.length());
-    const n = loadFactorFromBank(bankAngleZ(player));
-    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(player.quaternion);
-    const liftMag = state.liftCoef * Math.max(0, v.length()) * n;
-    const lift = up.multiplyScalar(liftMag);
-    const gravity = new THREE.Vector3(0, -9.8, 0);
-    v.add(thrust.add(drag).add(lift).add(gravity).multiplyScalar(dt));
-
-    const stallV = state.baseStall * Math.sqrt(n);
-    if (v.length() < stallV && player.rotation.x < -0.25) {
+    const drag = v.clone().multiplyScalar(-CFG.physics.dragCoef * v.length());
+    const n = loadFactorFromBank(bankAngleZ(state.player));
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(state.player.quaternion);
+    const lift = up.multiplyScalar(CFG.physics.liftCoef * Math.max(0, v.length()) * n);
+    v.add(
+        thrust
+            .add(drag)
+            .add(lift)
+            .add(new THREE.Vector3(0, CFG.physics.gravity, 0))
+            .multiplyScalar(dt),
+    );
+    const stallV = CFG.physics.baseStall * Math.sqrt(n);
+    if (v.length() < stallV && state.player.rotation.x < -0.25) {
         v.y -= (stallV - v.length()) * 1.8 * dt;
     }
-
-    player.position.add(v.clone().multiplyScalar(dt));
-    if (player.position.y < 0.5) {
-        player.position.y = 0.5;
+    state.player.position.add(v.clone().multiplyScalar(dt));
+    if (state.player.position.y < CFG.land.groundY) {
+        state.player.position.y = CFG.land.groundY;
         if (v.y < 0) v.y *= -0.2;
         v.x *= 0.98;
         v.z *= 0.98;
     }
-
-    // Firing
+    // Fire
     if (fireIn && state.ammo > 0 && state.jam <= 0) {
-        fireTimer -= dt;
-        if (fireTimer <= 0) {
-            const f = forwardOf(player);
-            const muzzle = player.position
+        state.fireTimer -= dt;
+        if (state.fireTimer <= 0) {
+            const muzzle = state.player.position
                 .clone()
-                .add(f.clone().multiplyScalar(6.6))
+                .add(fwd.clone().multiplyScalar(6.6))
                 .add(new THREE.Vector3(0, 0.3, 0));
-            spawnBullet(muzzle, f, "player");
+            spawnBullet(muzzle, fwd, "player");
             state.ammo -= 1;
-            fireTimer = 0.05;
-            if (Math.random() < 0.002) {
-                state.jam = 2.0;
-            }
+            state.fireTimer = CFG.guns.rof;
+            if (Math.random() < CFG.guns.jamChance) state.jam = CFG.guns.jamCd;
         }
     } else {
-        fireTimer = 0;
+        state.fireTimer = 0;
     }
     if (state.jam > 0) state.jam = Math.max(0, state.jam - dt);
-
-    if (state.hp < 40 && Math.random() < 0.2) {
-        const back = player.position.clone().add(fwd.clone().multiplyScalar(-2));
+    if (state.hp < CFG.damage.smokeHP && Math.random() < 0.2) {
+        const back = state.player.position.clone().add(fwd.clone().multiplyScalar(-2));
         spawnSmoke(back, v.clone().multiplyScalar(0.02), 0.8);
     }
-
     if (state.hp <= 0) {
-        respawnTimer -= dt;
-        if (respawnTimer <= 0) {
+        state.respawnTimer -= dt;
+        if (state.respawnTimer <= 0) {
             state.hp = 100;
             state.ammo = 400;
             state.vel.set(0, 0, 0);
-            player.position.set(-200, 40, -200);
-            player.rotation.set(0, Math.random() * Math.PI * 2, 0);
-            respawnTimer = 0.5;
+            state.player.position.set(-200, 40, -200);
+            state.player.rotation.set(0, Math.random() * Math.PI * 2, 0);
+            state.respawnTimer = 0.5;
         }
     }
-
-    if (player.userData.prop) player.userData.prop.rotation.x += (20 + 80 * state.throttle) * dt;
+    if (state.player.userData.prop) state.player.userData.prop.rotation.x += (20 + 80 * state.throttle) * dt;
 }
 
-// ====== Bots ======
 function updateBots(dt) {
-    bots.forEach((b) => {
+    for (const b of entities.bots) {
         const d = b.userData;
         if (d.hp <= 0) {
             b.visible = false;
-            return;
+            continue;
         }
         b.visible = true;
         d.thinkCooldown -= dt;
         d.fireCd -= dt;
         if (d.thinkCooldown <= 0) {
-            const toP = player.position.clone().sub(b.position);
-            const bulletSpeed = 185;
+            const toP = state.player.position.clone().sub(b.position);
             const dist = toP.length();
-            const tLead = dist / bulletSpeed;
-            const leadPos = player.position.clone().add(state.vel.clone().multiplyScalar(tLead));
+            const tLead = dist / CFG.guns.bulletSpeed;
+            const leadPos = state.player.position.clone().add(state.vel.clone().multiplyScalar(tLead));
             const aimDir = leadPos.sub(b.position).normalize();
             const desiredYaw = Math.atan2(aimDir.z, aimDir.x);
-            const curYaw = b.rotation.y;
-            const yawDelta = wrapAngle(desiredYaw - curYaw);
+            const yawDelta = wrapAngle(desiredYaw - b.rotation.y);
             b.rotation.y += THREE.MathUtils.clamp(yawDelta, -0.8 * dt, 0.8 * dt);
-            const dy = player.position.y - b.position.y;
+            const dy = state.player.position.y - b.position.y;
             b.rotation.x += THREE.MathUtils.clamp(-dy * 0.002, -0.6 * dt, 0.6 * dt);
             b.rotation.z += THREE.MathUtils.clamp((Math.random() - 0.5) * 0.8 * dt, -0.8 * dt, 0.8 * dt);
-            d.thinkCooldown = 0.02;
+            d.thinkCooldown = CFG.ai.thinkDt;
         }
         const fwd = forwardOf(b);
-        const thrust = fwd.clone().multiplyScalar(36 * d.throttle);
+        const thrust = fwd.clone().multiplyScalar(CFG.physics.botThrust * d.throttle);
         d.vel.add(thrust.multiplyScalar(dt));
-        d.vel.add(d.vel.clone().multiplyScalar(-0.012 * d.vel.length() * dt));
-        d.vel.y += -9.8 * dt;
+        d.vel.add(d.vel.clone().multiplyScalar(-CFG.physics.dragCoef * d.vel.length() * dt));
+        d.vel.y += CFG.physics.gravity * dt;
         b.position.add(d.vel.clone().multiplyScalar(dt));
         if (b.position.y < 1) {
             b.position.y = 1;
@@ -661,67 +639,60 @@ function updateBots(dt) {
             d.vel.x *= 0.98;
             d.vel.z *= 0.98;
         }
-
-        const toP2 = player.position.clone().sub(b.position);
-        const dist2 = toP2.length();
-        if (dist2 < 380) {
+        const toP2 = state.player.position.clone().sub(b.position);
+        if (toP2.length() < CFG.ai.fireDist) {
             const aim = forwardOf(b).normalize();
             const cos = aim.dot(toP2.normalize());
-            if (cos > 0.985 && d.fireCd <= 0) {
+            if (cos > CFG.ai.aimCos && d.fireCd <= 0) {
                 const muzzle = b.position.clone().add(aim.clone().multiplyScalar(6.4));
                 spawnBullet(muzzle, aim, "bot");
-                d.fireCd = 0.06;
+                d.fireCd = CFG.guns.botFireCd;
             }
         }
-
-        if (d.hp < 35 && Math.random() < 0.15) {
+        if (d.hp < CFG.damage.botSmokeHP && Math.random() < 0.15) {
             const back = b.position.clone().add(forwardOf(b).multiplyScalar(-2));
             spawnSmoke(back, d.vel.clone().multiplyScalar(0.02), 0.8);
         }
-    });
+    }
 }
 
-// ====== Bullets & Collisions ======
 function updateBullets(dt) {
-    for (let i = bullets.length - 1; i >= 0; i--) {
-        const b = bullets[i];
+    for (let i = entities.bullets.length - 1; i >= 0; i--) {
+        const b = entities.bullets[i];
         b.userData.ttl -= dt;
         if (b.userData.ttl <= 0) {
             scene.remove(b);
-            bullets.splice(i, 1);
+            entities.bullets.splice(i, 1);
             continue;
         }
         b.position.add(b.userData.vel.clone().multiplyScalar(dt));
         if (b.userData.from === "player") {
-            for (const t of bots) {
+            for (const t of entities.bots) {
                 if (t.userData.hp > 0 && b.position.distanceTo(t.position) < 2.0) {
-                    t.userData.hp -= 20;
-                    if (t.userData.hp <= 0) {
-                        state.score += 100;
-                    }
+                    t.userData.hp -= CFG.damage.botHit;
+                    if (t.userData.hp <= 0) state.score += 100;
                     scene.remove(b);
-                    bullets.splice(i, 1);
+                    entities.bullets.splice(i, 1);
                     break;
                 }
             }
         } else {
-            if (state.hp > 0 && b.position.distanceTo(player.position) < 2.0) {
-                state.hp -= 15;
+            if (state.hp > 0 && b.position.distanceTo(state.player.position) < 2.0) {
+                state.hp -= CFG.damage.playerHit;
                 scene.remove(b);
-                bullets.splice(i, 1);
+                entities.bullets.splice(i, 1);
             }
         }
     }
 }
 
-// ====== Particles ======
 function updateParticles(dt) {
-    for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
+    for (let i = entities.particles.length - 1; i >= 0; i--) {
+        const p = entities.particles[i];
         p.userData.ttl -= dt;
         if (p.userData.ttl <= 0) {
             scene.remove(p);
-            particles.splice(i, 1);
+            entities.particles.splice(i, 1);
             continue;
         }
         p.material.opacity = Math.max(0, p.userData.ttl / 1.2);
@@ -730,25 +701,25 @@ function updateParticles(dt) {
     }
 }
 
-// ====== Camera ======
 function updateCamera(dt) {
-    const fwd = forwardOf(player);
-    const behind = player.position
+    const fwd = forwardOf(state.player);
+    const behind = state.player.position
         .clone()
-        .add(fwd.clone().multiplyScalar(-13))
-        .add(new THREE.Vector3(0, 4, 0));
-    camera.position.lerp(behind, 1 - Math.pow(0.001, dt));
-    const lookAt = player.position.clone().add(fwd.clone().multiplyScalar(10));
-    camera.lookAt(lookAt);
+        .add(fwd.clone().multiplyScalar(-CFG.camera.back))
+        .add(new THREE.Vector3(0, CFG.camera.up, 0));
+    camera.position.lerp(behind, 1 - Math.pow(CFG.camera.lerpT, dt));
+    camera.lookAt(state.player.position.clone().add(fwd.clone().multiplyScalar(CFG.camera.lookAhead)));
 }
 
-// ====== Loop ======
+// =========================
+// Main Loop
+// =========================
 let last = performance.now() / 1000;
 function loop() {
     const now = performance.now() / 1000;
-    let dt = Math.min(0.033, now - last);
+    const dt = Math.min(0.033, now - last);
     last = now;
-    updatePlayer(dt);
+    playerControls(dt);
     updateBots(dt);
     updateBullets(dt);
     updateParticles(dt);
@@ -766,7 +737,9 @@ addEventListener("resize", () => {
     camera.updateProjectionMatrix();
 });
 
-// ====== Runtime Self‑tests ======
+// =========================
+// Runtime Self‑tests (kept + extended)
+// =========================
 try {
     console.assert(THREE != null, "THREE module is present");
     logTest("THREE namespace present");
@@ -785,8 +758,8 @@ try {
     console.assert(Math.abs(n0 - 1) < 1e-6, "n(0)=1");
     console.assert(Math.abs(n60 - 2) < 0.05, "n(60°)≈2");
     logTest("Load factor checks");
-    const s0 = 12 * Math.sqrt(n0),
-        s60 = 12 * Math.sqrt(n60);
+    const s0 = CFG.physics.baseStall * Math.sqrt(n0),
+        s60 = CFG.physics.baseStall * Math.sqrt(n60);
     console.assert(s60 > s0, "stall increases with bank");
     logTest("Stall scaling");
     console.assert(renderer instanceof THREE.WebGLRenderer, "renderer ok");
@@ -800,7 +773,6 @@ try {
     })(4 * Math.PI);
     console.assert(wa >= -Math.PI && wa <= Math.PI, "wrapAngle range");
     logTest("wrapAngle range");
-    // Input capability tests (additive)
     console.assert(typeof supportsPointerLock === "boolean", "PointerLock support flag is boolean");
     logTest("PointerLock flag");
     console.assert(["auto", "desktop", "touch", "keyboard"].includes(controlSelect.value), "Control picker present");
@@ -810,7 +782,6 @@ try {
         "Resolved mode valid",
     );
     logTest("Resolved mode");
-    // NEW: pointer-lock safe wrapper
     let plOK = false;
     try {
         plOK = safeRequestPointerLock();
@@ -823,13 +794,26 @@ try {
         console.assert(["pl", "drag"].includes(desktopSubmode), "desktop submode valid");
         logTest("Desktop submode: " + desktopSubmode);
     }
+    // NEW tests: config sanity
+    console.assert(CFG.ai.count > 0 && CFG.guns.bulletSpeed > 0, "Config sane");
+    logTest("Config sanity");
     logTest("Self-tests passed.");
 } catch (e) {
     logTest("Self-tests failed: " + e.message, false);
 }
 
-function wrapAngle(a) {
-    while (a > Math.PI) a -= Math.PI * 2;
-    while (a < -Math.PI) a += Math.PI * 2;
-    return a;
-}
+// =========================
+// Public API (for tests/backwards compat)
+// =========================
+// Expose names that tests rely on. Keep global identifiers intact.
+Object.assign(window, {
+    forwardOf,
+    inRunwayBounds,
+    resolveInputMode,
+    safeRequestPointerLock,
+    desktopSubmode,
+    renderer,
+    camera,
+    runwayLen,
+    runwayWid,
+});
