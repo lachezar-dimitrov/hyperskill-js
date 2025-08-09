@@ -514,20 +514,20 @@ const movementKeys = {
     },
 };
 
-// === Controls & Flight Dynamics ===
-// Drop-in replacement for your player control loop.
-// Assumes Three.js aircraft facing -Z (default).
+// === Controls & Flight Dynamics (JavaScript) ===
+// Assumes Three.js aircraft faces -Z, Y-up. Keeps your existing helpers/state.
 
 const CTRL = {
-    maxRollRate: 2.6, // rad/s
-    maxPitchRate: 1.9, // rad/s
-    maxYawRate: 1.3, // rad/s
+    maxRollRate: 2.6, // rad/s, ailerons
+    maxPitchRate: 1.9, // rad/s, elevator
+    maxYawRate: 1.3, // rad/s, rudder
     damping: 3.2, // 1/s, angular velocity damping
-    coordYawFromRoll: 0.18, // yaw added from roll (coordinated turn feel)
+    coordYawFromRoll: 0.18, // extra yaw from roll for coordinated turns
     deadzone: 0.06,
     mouseYawScale: 2.0,
     mousePitchScale: 1.8,
     throttleRate: 0.45, // /s
+    USE_WS_FOR_PITCH: true, // W/S control pitch; throttle moved to R/F
 };
 
 function applyDeadzone(x, dz = CTRL.deadzone) {
@@ -536,40 +536,51 @@ function applyDeadzone(x, dz = CTRL.deadzone) {
     return (s * (Math.abs(x) - dz)) / (1 - dz);
 }
 
+function ensureAngularState(state) {
+    if (!state.angVel) state.angVel = new THREE.Vector3(0, 0, 0); // (x=pitch, y=yaw, z=roll storage)
+}
+
 function sampleInputs(mode) {
-    // Returns normalised axes in [-1, 1] and discrete flags.
+    // Returns { yaw, pitch, roll, fire, dThrottle } in [-1,1]
     let yaw = 0,
         pitch = 0,
         roll = 0,
         fire = false,
         dThrottle = 0;
 
+    // --- Throttle on R/F to free W/S for pitch ---
     if (mode !== "touch") {
-        if (keys["KeyW"]) dThrottle += CTRL.throttleRate;
-        if (keys["KeyS"]) dThrottle -= CTRL.throttleRate;
+        if (keys["KeyR"]) dThrottle += CTRL.throttleRate;
+        if (keys["KeyF"]) dThrottle -= CTRL.throttleRate;
     }
 
     if (mode === "desktop") {
-        // Keys
+        // --- Keys ---
+        // Roll: arrows
         roll += (keys[movementKeys.arrow.right] ? 1 : 0) - (keys[movementKeys.arrow.left] ? 1 : 0);
+
+        // Yaw: Q/E
         yaw += (keys["KeyE"] ? 1 : 0) - (keys["KeyQ"] ? 1 : 0);
+
+        // Pitch: W/S and PageUp/PageDown (PageDown = nose up to match your note)
+        pitch += (keys["KeyW"] ? 1 : 0) - (keys["KeyS"] ? 1 : 0);
         pitch += (keys["PageDown"] ? 1 : 0) - (keys["PageUp"] ? 1 : 0);
 
-        // Mouse (dx → yaw, dy → pitch), zero after read
+        // --- Mouse (dx → yaw, dy → pitch). Mouse up = nose up ---
         const yawMouse = mouse.dx * mouse.sens * CTRL.mouseYawScale;
         const pitchMouse = mouse.dy * mouse.sens * CTRL.mousePitchScale;
         mouse.dx = 0;
         mouse.dy = 0;
 
         yaw += yawMouse;
-        // Mouse up should be nose up; pitch axis is inverted
         pitch += -pitchMouse;
 
         fire = !!keys["Space"];
     } else if (mode === "keyboard") {
         roll = (keys[movementKeys.arrow.right] ? 1 : 0) - (keys[movementKeys.arrow.left] ? 1 : 0);
         yaw = (keys["KeyE"] ? 1 : 0) - (keys["KeyQ"] ? 1 : 0);
-        pitch = (keys["PageDown"] ? 1 : 0) - (keys["PageUp"] ? 1 : 0);
+        pitch = (keys["KeyW"] ? 1 : 0) - (keys["KeyS"] ? 1 : 0);
+        pitch += (keys["PageDown"] ? 1 : 0) - (keys["PageUp"] ? 1 : 0);
         fire = !!keys["Space"];
     } else {
         // touch
@@ -579,7 +590,7 @@ function sampleInputs(mode) {
         fire = touchFire;
     }
 
-    // Clamp & shape
+    // Clamp + deadzone
     yaw = applyDeadzone(THREE.MathUtils.clamp(yaw, -1, 1));
     pitch = applyDeadzone(THREE.MathUtils.clamp(pitch, -1, 1));
     roll = applyDeadzone(THREE.MathUtils.clamp(roll, -1, 1));
@@ -593,36 +604,25 @@ function updateThrottle(state, dThrottle, dt) {
     }
 }
 
-function ensureAngularState(state) {
-    // Store angular velocity in local axes: [rollZ, pitchX, yawY]
-    if (!state.angVel) state.angVel = new THREE.Vector3(0, 0, 0);
-}
-
 function applyAttitude(state, inputs, dt) {
     ensureAngularState(state);
 
-    // Health scales control authority
     const controlScale = 0.6 + 0.4 * (state.hp / 100);
-
-    // Target rates from inputs
     const targetRollRate = inputs.roll * CTRL.maxRollRate * controlScale; // about Z
     const targetPitchRate = inputs.pitch * CTRL.maxPitchRate * controlScale; // about X
     const targetYawRate = inputs.yaw * CTRL.maxYawRate * controlScale; // about Y
-
-    // Coordinated turn: add a little yaw from roll
     const coordYaw = inputs.roll * CTRL.maxYawRate * CTRL.coordYawFromRoll;
 
-    // Critically damped-ish first order towards target (here: simple blend)
+    // First-order approach to target rates with damping
     const blend = Math.exp(-CTRL.damping * dt);
-    state.angVel.z = targetRollRate + (state.angVel.z - targetRollRate) * blend; // roll
-    state.angVel.x = targetPitchRate + (state.angVel.x - targetPitchRate) * blend; // pitch
-    state.angVel.y = targetYawRate + coordYaw + (state.angVel.y - (targetYawRate + coordYaw)) * blend; // yaw
+    state.angVel.z = targetRollRate + (state.angVel.z - targetRollRate) * blend; // roll storage
+    state.angVel.x = targetPitchRate + (state.angVel.x - targetPitchRate) * blend; // pitch storage
+    state.angVel.y = targetYawRate + coordYaw + (state.angVel.y - (targetYawRate + coordYaw)) * blend; // yaw storage
 
-    // === Apply local-axis rotations ===
-    // Three.js aircraft faces -Z. Signs:
-    //  - roll right  -> +rotateZ
-    //  - pitch up    -> -rotateX
-    //  - yaw right   -> -rotateY
+    // Apply local-axis rotations (aircraft faces -Z):
+    // roll right  -> +rotateZ
+    // pitch up    -> -rotateX
+    // yaw right   -> -rotateY
     const r = state.angVel;
     state.player.rotateZ(+r.z * dt);
     state.player.rotateX(-r.x * dt);
@@ -630,7 +630,7 @@ function applyAttitude(state, inputs, dt) {
 }
 
 function integrateForces(state, dt) {
-    // Keep your existing aero model; only names tidied.
+    // Your aero kept intact; only variable names cleaned.
     const fwd = forwardOf(state.player);
     const healthScale = 0.6 + 0.4 * (state.hp / 100);
 
@@ -638,7 +638,7 @@ function integrateForces(state, dt) {
     const v = state.vel;
     const drag = v.clone().multiplyScalar(-CFG.physics.dragCoef * v.length());
 
-    const n = loadFactorFromBank(bankAngleZ(state.player)); // your helper
+    const n = loadFactorFromBank(bankAngleZ(state.player));
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(state.player.quaternion);
     const lift = up.multiplyScalar(CFG.physics.liftCoef * Math.max(0, v.length()) * n);
 
@@ -650,7 +650,7 @@ function integrateForces(state, dt) {
             .multiplyScalar(dt),
     );
 
-    // Simple stall: if slow & high nose-up, sink
+    // Stall assist: slow + high AoA nose-up sinks
     const stallV = CFG.physics.baseStall * Math.sqrt(n);
     const pitch = state.player.rotation.x;
     if (v.length() < stallV && pitch < -0.25) {
@@ -659,7 +659,7 @@ function integrateForces(state, dt) {
 
     state.player.position.add(v.clone().multiplyScalar(dt));
 
-    // Ground collision / bounce & friction
+    // Ground interaction
     if (state.player.position.y < CFG.land.groundY) {
         state.player.position.y = CFG.land.groundY;
         if (v.y < 0) v.y *= -0.2;
@@ -707,12 +707,12 @@ function respawnIfDead(state, dt) {
 }
 
 function updateProp(state, dt) {
-    if (state.player.userData?.prop) {
+    if (state.player.userData && state.player.userData.prop) {
         state.player.userData.prop.rotation.x += (20 + 80 * state.throttle) * dt;
     }
 }
 
-// === Main entry ===
+// === Main loop entry ===
 function playerControls(dt) {
     const mode = resolveInputMode();
 
@@ -720,7 +720,7 @@ function playerControls(dt) {
     const { yaw, pitch, roll, fire, dThrottle } = sampleInputs(mode);
     updateThrottle(state, dThrottle, dt);
 
-    // 2) Attitude (rotation)
+    // 2) Attitude via angular rates
     applyAttitude(state, { yaw, pitch, roll }, dt);
 
     // 3) Forces & kinematics
@@ -730,7 +730,7 @@ function playerControls(dt) {
     const fwd = forwardOf(state.player);
     gunsAndFX(state, fwd, dt, fire);
 
-    // 5) Life cycle & visuals
+    // 5) Lifecycle & visuals
     respawnIfDead(state, dt);
     updateProp(state, dt);
 }
