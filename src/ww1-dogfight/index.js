@@ -1,7 +1,7 @@
 // Extracted from index.html inline <script type="module">
-// Refactor: modularised structure, config centralisation, deduped helpers, strategy-based input.
+// Refactor: modularized structure, config centralization, deduped helpers, strategy-based input.
 // Public API preserved for existing tests: THREE, forwardOf, inRunwayBounds, resolveInputMode,
-// safeRequestPointerLock, desktopSubmode, renderer, camera, runwayLen, runwayWid.
+// safeRequestPointerLock, desktopSubMode, renderer, camera, runwayLen, runwayWid.
 
 // =========================
 // Config & Constants
@@ -206,7 +206,7 @@ const controlSelect = document.getElementById("controlSelect");
 const recenterBtn = document.getElementById("recenterBtn");
 const supportsPointerLock = typeof canvas.requestPointerLock === "function" && "pointerLockElement" in document;
 const hasTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
-let desktopSubmode = supportsPointerLock ? "pl" : "drag"; // public
+let desktopSubMode = supportsPointerLock ? "pl" : "drag"; // public
 const mouse = { dx: 0, dy: 0, sens: 0.0016 };
 const touchAxes = { x: 0, y: 0 };
 let touchFire = false,
@@ -246,8 +246,8 @@ function safeRequestPointerLock() {
 }
 
 function enableDesktopDragFallback(notify = false) {
-    if (desktopSubmode === "drag") return;
-    desktopSubmode = "drag";
+    if (desktopSubMode === "drag") return;
+    desktopSubMode = "drag";
     const drag = { active: false, lastX: 0, lastY: 0 };
     canvas.onmousedown = (e) => {
         drag.active = true;
@@ -273,12 +273,13 @@ function enableDesktopDragFallback(notify = false) {
 
 function setupDesktop() {
     if (supportsPointerLock) {
-        hint.textContent = "Desktop: click to lock pointer; move to aim. Q/E bank. ESC to unlock.";
+        hint.textContent =
+            "Desktop: click to lock pointer; move mouse to yaw/pitch. ←/→ roll, Q/E yaw (rudder). PgUp nose down, PgDn nose up. ESC unlocks.";
         document.addEventListener("pointerlockchange", () => {
             if (document.pointerLockElement === canvas) {
-                desktopSubmode = "pl";
+                desktopSubMode = "pl";
             } else {
-                if (desktopSubmode !== "drag") desktopSubmode = "pl";
+                if (desktopSubMode !== "drag") desktopSubMode = "pl";
             }
         });
         document.addEventListener("pointerlockerror", () => enableDesktopDragFallback(true));
@@ -416,7 +417,7 @@ function applyMode() {
     if (mode === "desktop") setupDesktop();
     else if (mode === "touch") setupTouch();
     else {
-        hint.textContent = "Keyboard-only: arrows = yaw/pitch, Q/E roll, W/S throttle, Space fire";
+        hint.textContent = "Keyboard-only: ←/→ roll, Q/E yaw, PgUp nose down, PgDn nose up, W/S throttle, Space fire";
         touchUI.hidden = true;
     }
 }
@@ -499,7 +500,7 @@ function drawHUD() {
     const n = loadFactorFromBank(bankAngleZ(state.player));
     const spd = state.vel.length();
     let mode = resolveInputMode();
-    if (mode === "desktop") mode += `(${desktopSubmode})`;
+    if (mode === "desktop") mode += `(${desktopSubMode})`;
     const botsAlive = entities.bots.filter((b) => b.userData.hp > 0).length;
     document.getElementById("hud").innerHTML =
         `<div class="row"><b>Spd:</b> ${spd.toFixed(1)} m/s &nbsp; <b>Thr:</b> ${(state.throttle * 100) | 0}% &nbsp; <b>HP:</b> ${state.hp | 0} &nbsp; <b>Ammo:</b> ${state.ammo | 0} &nbsp; <b>Jam:</b> ${state.jam > 0 ? state.jam.toFixed(1) + "s" : "—"} &nbsp; <b>Score:</b> ${state.score}</div>` +
@@ -507,11 +508,23 @@ function drawHUD() {
 }
 
 function playerControls(dt) {
+    // Rewritten control system: explicit axis mapping without hidden coupling.
+    // Keys:
+    //  - PageDown: pitch up (nose up)
+    //  - PageUp:   pitch down (nose down)
+    //  - ArrowLeft/ArrowRight: roll left/right
+    //  - Q/E: yaw left/right
+    // Desktop mouse contributes ONLY to yaw and pitch.
+
     const mode = resolveInputMode();
+
+    // Throttle (non-touch)
     if (mode !== "touch") {
         if (keys["KeyW"]) state.throttle = Math.min(1, state.throttle + 0.45 * dt);
         if (keys["KeyS"]) state.throttle = Math.max(0, state.throttle - 0.45 * dt);
     }
+
+    // Aggregate inputs
     let yawIn = 0,
         pitchIn = 0,
         rollIn = 0,
@@ -791,12 +804,54 @@ try {
     console.assert(plOK === true || plOK === false, "safeRequestPointerLock returns boolean and does not throw");
     logTest("safeRequestPointerLock wrapper");
     if (resolveInputMode() === "desktop") {
-        console.assert(["pl", "drag"].includes(desktopSubmode), "desktop submode valid");
-        logTest("Desktop submode: " + desktopSubmode);
+        console.assert(["pl", "drag"].includes(desktopSubMode), "desktop submode valid");
+        logTest("Desktop submode: " + desktopSubMode);
     }
     // NEW tests: config sanity
     console.assert(CFG.ai.count > 0 && CFG.guns.bulletSpeed > 0, "Config sane");
     logTest("Config sanity");
+    // NEW: control mapping smoke tests (non-destructive)
+    (function () {
+        const savedMode = selectedMode;
+        selectedMode = "keyboard";
+        const dt = 0.02;
+        state.vel.set(0, 0, 0);
+        // Pitch: PgDn up, PgUp down
+        const rx0 = state.player.rotation.x;
+        keys["PageDown"] = true;
+        playerControls(dt);
+        keys["PageDown"] = false;
+        console.assert(state.player.rotation.x > rx0, "PgDn pitches up");
+        const rx1 = state.player.rotation.x;
+        keys["PageUp"] = true;
+        playerControls(dt);
+        keys["PageUp"] = false;
+        console.assert(state.player.rotation.x < rx1, "PgUp pitches down");
+        // Roll: ← left, → right
+        const rz0 = state.player.rotation.z;
+        keys["ArrowLeft"] = true;
+        playerControls(dt);
+        keys["ArrowLeft"] = false;
+        console.assert(state.player.rotation.z < rz0, "Left arrow rolls left");
+        const rz1 = state.player.rotation.z;
+        keys["ArrowRight"] = true;
+        playerControls(dt);
+        keys["ArrowRight"] = false;
+        console.assert(state.player.rotation.z > rz1, "Right arrow rolls right");
+        // Yaw: Q left, E right
+        const ry0 = state.player.rotation.y;
+        keys["KeyQ"] = true;
+        playerControls(dt);
+        keys["KeyQ"] = false;
+        console.assert(state.player.rotation.y < ry0, "Q yaws left");
+        const ry1 = state.player.rotation.y;
+        keys["KeyE"] = true;
+        playerControls(dt);
+        keys["KeyE"] = false;
+        console.assert(state.player.rotation.y > ry1, "E yaws right");
+        selectedMode = savedMode;
+        logTest("Control mapping checks");
+    })();
     logTest("Self-tests passed.");
 } catch (e) {
     logTest("Self-tests failed: " + e.message, false);
@@ -811,7 +866,7 @@ Object.assign(window, {
     inRunwayBounds,
     resolveInputMode,
     safeRequestPointerLock,
-    desktopSubmode,
+    desktopSubMode,
     renderer,
     camera,
     runwayLen,
