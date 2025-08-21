@@ -1,5 +1,5 @@
 {
-    "name": "net-income-calculator",
+    "name": "hyperskill-js",
     "version": "1.0.0",
     "description": "",
     "type": "module",
@@ -23,9 +23,9 @@
         "sync-input": "https://github.com/hyperskill/sync-input/archive/v1.tar.gz"
     },
     "devDependencies": {
-        "prettier": "3.4.2",
         "hs-test-web": "https://github.com/hyperskill/hs-test-web/archive/release.tar.gz",
-        "mocha": "10.2.0",
-        "puppeteer": "21.0.0"
+        "mocha": "^10.8.2",
+        "prettier": "3.4.2",
+        "puppeteer": "^24.17.0"
     }
 }
