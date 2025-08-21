@@ -1,0 +1,1301 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MTB Downhill – Single-file Prototype</title>
+    <!--
+    How to run
+    1) Save this file as index.html and open in a modern desktop browser (Chrome/Edge/Firefox).
+    2) Click the canvas, press "Ride" to start, then allow pointer-lock when prompted.
+    3) Controls: W/S throttle/brake, A/D steer/lean, Space hop, C camera, R restart, P pause, F3 debug.
+       Mouse to look in first-person. Gamepad supported: RT throttle, LT brake, LS steer, RS camera, A hop.
+
+    Subsystems
+    - Terrain: Seeded Perlin-noise mountain with a carved spline trail. Add "?seed=1234" to URL to vary world.
+    - Physics: Fixed-timestep (60 Hz) with simple bike+rider proxy body, gravity, drag, rolling resistance,
+               tyre slip estimation, suspension springs via ground penetration depth, crash detection.
+    - Camera: First-person with lean/roll & FOV by speed; third-person spring-arm.
+    - HUD: Speed, timer, checkpoints, crash counter. Pause/Settings overlays.
+    - Debug: F3 toggles overlay with frame/physics times, slip angles, suspension travel.
+
+    Acceptance checks
+    - Loads without console errors; both camera modes work; pointer-lock works.
+    - Bike can exceed 50 km/h, corner, hop, crash, finish a timed run.
+    - Respawn returns to last checkpoint.
+    - Changing ?seed changes the mountain deterministically.
+    - Quality settings measurably change shadows/render distance.
+    - Debug overlay shows slip angles and suspension travel.
+
+    Notes
+    - This is an original prototype inspired by MTB downhill flow, not a clone of any proprietary work.
+    - All code/assets are generated here; only Three.js ESM CDN is used.
+  -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #0b0f14;
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Ubuntu,
+          Cantarell,
+          "Noto Sans",
+          "Helvetica Neue",
+          Arial,
+          "Apple Color Emoji",
+          "Segoe UI Emoji";
+      }
+      #hud {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        color: #e8f0ff;
+        background: rgba(0, 0, 0, 0.35);
+        padding: 8px 10px;
+        border-radius: 10px;
+        font-size: 13px;
+        line-height: 1.35;
+        pointer-events: none;
+      }
+      #hud strong {
+        font-weight: 700;
+      }
+      #crosshair {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        width: 8px;
+        height: 8px;
+        margin-left: -4px;
+        margin-top: -4px;
+        background: rgba(255, 255, 255, 0.7);
+        border-radius: 50%;
+        opacity: 0.5;
+        pointer-events: none;
+      }
+      #menu,
+      #pause,
+      #controls,
+      #settings {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(5, 8, 12, 0.85);
+        color: #e8f0ff;
+      }
+      .panel {
+        width: min(560px, 92vw);
+        max-height: 86vh;
+        overflow: auto;
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.08),
+          rgba(255, 255, 255, 0.03)
+        );
+        padding: 20px;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      button,
+      select,
+      input[type="range"] {
+        background: #1a2430;
+        color: #e8f0ff;
+        border: 1px solid #2a3a4f;
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #213042;
+      }
+      label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        margin: 6px 0;
+        gap: 10px;
+      }
+      #debug {
+        position: fixed;
+        right: 12px;
+        top: 12px;
+        background: rgba(0, 0, 0, 0.55);
+        color: #cfe3ff;
+        padding: 10px 12px;
+        border-radius: 10px;
+        font:
+          12px/1.35 ui-monospace,
+          Menlo,
+          Monaco,
+          Consolas,
+          "Liberation Mono",
+          "Courier New",
+          monospace;
+        white-space: pre;
+        display: none;
+        max-width: 38vw;
+      }
+      #finishBanner {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 42px;
+        text-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
+        pointer-events: none;
+      }
+      #tests {
+        position: fixed;
+        bottom: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.55);
+        color: #cfe3ff;
+        padding: 8px 10px;
+        border-radius: 10px;
+        font:
+          12px/1.35 ui-monospace,
+          Menlo,
+          Monaco,
+          Consolas,
+          "Liberation Mono",
+          "Courier New",
+          monospace;
+        max-width: 60vw;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hud">
+      <div><strong>Speed:</strong> <span id="speed">0</span> km/h</div>
+      <div><strong>Time:</strong> <span id="time">0.00</span> s</div>
+      <div>
+        <strong>Checkpoint:</strong> <span id="cp">0</span>/<span id="cpmax"
+          >0</span
+        >
+      </div>
+      <div><strong>Crashes:</strong> <span id="crash">0</span></div>
+    </div>
+    <div id="crosshair"></div>
+    <div id="menu">
+      <div class="panel">
+        <h1>MTB Downhill – Prototype</h1>
+        <p>
+          Seeded procedural mountain with a carved trail. Ride to the finish
+          gate as fast as possible.
+        </p>
+        <div class="row">
+          <button id="rideBtn">Ride</button>
+          <button id="controlsBtn">Controls</button>
+          <button id="settingsBtn">Settings</button>
+          <button id="resetBtn">Reset to Defaults</button>
+        </div>
+        <p style="margin-top: 12px; opacity: 0.8">
+          Tip: add <code>?seed=1234</code> to the URL for a different mountain.
+        </p>
+      </div>
+    </div>
+    <div id="pause">
+      <div class="panel">
+        <h1>Paused</h1>
+        <div class="row">
+          <button id="resumeBtn">Resume</button>
+          <button id="restartBtn">Restart</button>
+          <button id="pauseSettingsBtn">Settings</button>
+          <button id="quitBtn">Quit</button>
+        </div>
+      </div>
+    </div>
+    <div id="controls">
+      <div class="panel">
+        <h1>Controls</h1>
+        <ul>
+          <li><strong>W/S</strong> – Throttle / Brake</li>
+          <li><strong>A/D</strong> – Steer / Lean</li>
+          <li><strong>Space</strong> – Hop</li>
+          <li><strong>C</strong> – Toggle camera</li>
+          <li><strong>R</strong> – Restart</li>
+          <li><strong>P</strong> – Pause</li>
+          <li><strong>F3</strong> – Debug overlay</li>
+          <li><strong>Mouse</strong> – Look (first-person)</li>
+          <li>
+            <strong>Gamepad</strong> – LS steer, RS look, RT throttle, LT brake,
+            A hop
+          </li>
+        </ul>
+        <div class="row"><button id="controlsBackBtn">Back</button></div>
+      </div>
+    </div>
+    <div id="settings">
+      <div class="panel">
+        <h1>Settings</h1>
+        <label>Invert Y <input id="invertY" type="checkbox" /></label>
+        <label
+          >Mouse sensitivity
+          <input
+            id="sens"
+            type="range"
+            min="0.2"
+            max="2.0"
+            step="0.05"
+            value="1"
+        /></label>
+        <label
+          >Graphics quality
+          <select id="quality">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+        <label
+          >Volume
+          <input
+            id="volume"
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value="0.4"
+        /></label>
+        <div class="row"><button id="settingsBackBtn">Back</button></div>
+      </div>
+    </div>
+    <div id="debug"></div>
+    <div id="finishBanner">FINISH</div>
+    <div id="tests">Self-tests: <span id="testsResult">running…</span></div>
+
+    <!-- Use ESM import to guarantee THREE is loaded before any usage -->
+    <script type="module">
+      import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
+
+      // Expose for console/debug hooks
+      window.THREE = THREE;
+
+      (function () {
+        "use strict";
+
+        // =========================
+        // Config & Tunables (CFG/PHYS)
+        // =========================
+        const CFG = {
+          // kept mutable to allow debug param tweaks
+          seed: getSeed(),
+          world: {
+            size: 4000,
+            segments: 256,
+            trailLen: 3200,
+            trailWidth: 16,
+            cpCount: 10,
+          },
+          view: { fovBase: 70, fovBySpeed: 0.12, far: 6000 },
+          lighting: { sunIntensity: 1.2 },
+          quality: { preset: "medium" },
+        };
+
+        const PHYS = {
+          // left mutable to allow __dbg.setParam
+          dt: 1 / 60,
+          g: 9.81,
+          mass: 95, // rider+bike kg
+          cda: 0.45,
+          rho: 1.225, // drag
+          rollCoef: 0.015, // rolling resistance
+          mu_s: 0.9,
+          mu_d: 0.7, // tyre friction
+          maxSteerRate: 2.0, // rad/s
+          maxLean: 0.5, // rad (~29 deg)
+          engineForce: 220, // N at peak
+          brakeForce: 900, // N
+          hopImpulse: 180, // N*s
+          susp: { k: 22000, c: 2200, rest: 0.45 }, // simple spring-damper, effective single-point
+          crash: {
+            maxPitchRate: 7.5,
+            maxRollRate: 8.5,
+            maxImpulse: 4000,
+            minSpeed: 1.5,
+          },
+        };
+
+        // =========================
+        // State
+        // =========================
+        const state = {
+          running: false,
+          paused: false,
+          finished: false,
+          time: 0,
+          crashes: 0,
+          cp: 0,
+          cpMax: CFG.world.cpCount,
+          camMode: "fpv", // 'fpv' | 'third'
+          input: {
+            W: 0,
+            S: 0,
+            A: 0,
+            D: 0,
+            SPACE: 0,
+            mouseX: 0,
+            mouseY: 0,
+            mouseDX: 0,
+            mouseDY: 0,
+            sens: 1,
+            invertY: false,
+          },
+          // Rigid body proxy
+          pos: new THREE.Vector3(),
+          vel: new THREE.Vector3(),
+          yaw: 0,
+          pitch: 0,
+          roll: 0, // bike frame Euler
+          angVel: new THREE.Vector3(), // for crash checks
+          groundN: new THREE.Vector3(0, 1, 0), // latest ground normal
+          suspComp: 0, // suspension compression (m)
+          slipAngle: 0,
+          // debug timings
+          frameMs: 0,
+          physMs: 0,
+        };
+
+        // =========================
+        // Three.js Scene Setup
+        // =========================
+        const renderer = new THREE.WebGLRenderer({
+          antialias: true,
+          alpha: false,
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0b0f14, 0.0006);
+
+        const camera = new THREE.PerspectiveCamera(
+          CFG.view.fovBase,
+          window.innerWidth / window.innerHeight,
+          0.1,
+          CFG.view.far
+        );
+
+        const thirdCam = new THREE.Object3D(); // spring arm anchor
+        const fpvCam = new THREE.Object3D();
+
+        const hemi = new THREE.HemisphereLight(0xbcd9ff, 0x102030, 0.5);
+        scene.add(hemi);
+
+        const sun = new THREE.DirectionalLight(
+          0xffffff,
+          CFG.lighting.sunIntensity
+        );
+        sun.position.set(1200, 1800, -900);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(2048, 2048);
+        sun.shadow.camera.near = 10;
+        sun.shadow.camera.far = 5000;
+        sun.shadow.camera.left = -2000;
+        sun.shadow.camera.right = 2000;
+        sun.shadow.camera.top = 1500;
+        sun.shadow.camera.bottom = -1500;
+        scene.add(sun);
+
+        // Simple bike visual (only for third-person)
+        const bike = new THREE.Object3D();
+        const frameGeo = new THREE.BoxGeometry(1.4, 0.3, 0.2);
+        const wheelGeo = new THREE.TorusGeometry(0.35, 0.07, 8, 20);
+        const matF = new THREE.MeshStandardMaterial({
+          color: 0x2fb0ff,
+          metalness: 0.5,
+          roughness: 0.4,
+        });
+        const matW = new THREE.MeshStandardMaterial({
+          color: 0x101010,
+          metalness: 0.2,
+          roughness: 0.9,
+        });
+        const frame = new THREE.Mesh(frameGeo, matF);
+        frame.castShadow = true;
+        frame.receiveShadow = false;
+        bike.add(frame);
+        const w1 = new THREE.Mesh(wheelGeo, matW);
+        w1.rotation.x = Math.PI / 2;
+        w1.position.set(0.6, -0.25, 0);
+        w1.castShadow = true;
+        bike.add(w1);
+        const w2 = new THREE.Mesh(wheelGeo, matW);
+        w2.rotation.x = Math.PI / 2;
+        w2.position.set(-0.6, -0.25, 0);
+        w2.castShadow = true;
+        bike.add(w2);
+        scene.add(bike);
+
+        // Ground material
+        const groundMat = new THREE.MeshStandardMaterial({
+          color: 0x364b2a,
+          roughness: 0.95,
+          metalness: 0.0,
+        });
+
+        // Procedural Terrain with carved trail
+        const terrain = buildTerrain(
+          CFG.world.size,
+          CFG.world.segments,
+          CFG.seed
+        );
+        const groundMesh = new THREE.Mesh(terrain.geo, groundMat);
+        groundMesh.receiveShadow = true;
+        scene.add(groundMesh);
+
+        // Checkpoints (simple torus gates)
+        const cps = buildCheckpoints(terrain.trail, CFG.world.cpCount);
+        cps.forEach((g) => scene.add(g));
+
+        // Finish gate
+        const finishGate = buildGate(
+          terrain.trail.getPointAt(1),
+          terrain.trail.getTangentAt(1)
+        );
+        scene.add(finishGate);
+
+        // HUD refs
+        const hud = {
+          speed: document.getElementById("speed"),
+          time: document.getElementById("time"),
+          cp: document.getElementById("cp"),
+          cpmax: document.getElementById("cpmax"),
+          crash: document.getElementById("crash"),
+          debug: document.getElementById("debug"),
+          menu: document.getElementById("menu"),
+          pause: document.getElementById("pause"),
+          controls: document.getElementById("controls"),
+          settings: document.getElementById("settings"),
+          finish: document.getElementById("finishBanner"),
+          sens: document.getElementById("sens"),
+          invertY: document.getElementById("invertY"),
+          quality: document.getElementById("quality"),
+          volume: document.getElementById("volume"),
+          tests: document.getElementById("tests"),
+          testsResult: document.getElementById("testsResult"),
+        };
+        hud.cpmax.textContent = String(state.cpMax);
+
+        // Input
+        const keys = Object.create(null);
+        window.addEventListener("keydown", (e) => {
+          keys[e.code] = true;
+          if (e.code === "KeyP") togglePause();
+          if (e.code === "KeyC") toggleCam();
+          if (e.code === "KeyF3") toggleDebug();
+          if (e.code === "KeyR") restartRun();
+        });
+        window.addEventListener("keyup", (e) => {
+          keys[e.code] = false;
+        });
+
+        // Mouse / pointer lock
+        const canvas = renderer.domElement;
+        canvas.addEventListener("click", () => {
+          if (state.running && !document.pointerLockElement)
+            canvas.requestPointerLock();
+        });
+        document.addEventListener("pointerlockchange", () => {
+          /* no-op */
+        });
+        document.addEventListener("mousemove", (e) => {
+          if (
+            document.pointerLockElement === canvas &&
+            state.camMode === "fpv" &&
+            state.running &&
+            !state.paused
+          ) {
+            state.input.mouseDX += e.movementX * state.input.sens;
+            state.input.mouseDY +=
+              (hud.invertY.checked ? e.movementY : -e.movementY) *
+              state.input.sens;
+          }
+        });
+
+        // Menus
+        document.getElementById("rideBtn").onclick = startGame;
+        document.getElementById("controlsBtn").onclick = () =>
+          show(hud.controls, true);
+        document.getElementById("settingsBtn").onclick = () =>
+          show(hud.settings, true);
+        document.getElementById("resetBtn").onclick = resetDefaults;
+        document.getElementById("controlsBackBtn").onclick = () =>
+          show(hud.controls, false);
+        document.getElementById("settingsBackBtn").onclick = () =>
+          show(hud.settings, false);
+        document.getElementById("resumeBtn").onclick = () => togglePause(false);
+        document.getElementById("restartBtn").onclick = restartRun;
+        document.getElementById("pauseSettingsBtn").onclick = () => {
+          show(hud.pause, false);
+          show(hud.settings, true);
+        };
+        document.getElementById("quitBtn").onclick = () => {
+          show(hud.pause, false);
+          show(hud.menu, true);
+          state.running = false;
+        };
+
+        hud.sens.oninput = () => {
+          state.input.sens = parseFloat(hud.sens.value);
+        };
+        hud.invertY.onchange = () => {
+          state.input.invertY = hud.invertY.checked;
+        };
+        hud.quality.onchange = () => applyQuality(hud.quality.value);
+
+        // Defaults
+        hud.sens.value = "1";
+        state.input.sens = 1;
+        hud.invertY.checked = false;
+        state.input.invertY = false;
+        applyQuality(CFG.quality.preset);
+
+        // Position at start
+        teleportToStart();
+
+        // =========================
+        // Game Loop: fixed-step physics with render interpolation
+        // =========================
+        let acc = 0,
+          last = performance.now();
+        function animate(now) {
+          const frameStart = performance.now();
+          const dt = Math.min(0.05, (now - last) / 1000);
+          last = now;
+          acc += dt;
+
+          // Read inputs
+          state.input.W = keys["KeyW"] ? 1 : 0;
+          state.input.S = keys["KeyS"] ? 1 : 0;
+          state.input.A = keys["KeyA"] ? 1 : 0;
+          state.input.D = keys["KeyD"] ? 1 : 0;
+          state.input.SPACE = keys["Space"] ? 1 : 0;
+
+          // Gamepad polling
+          pollGamepad();
+
+          if (state.running && !state.paused && !state.finished) {
+            while (acc >= PHYS.dt) {
+              const physStart = performance.now();
+              stepPhysics(PHYS.dt);
+              state.physMs = performance.now() - physStart;
+              acc -= PHYS.dt;
+              state.time += PHYS.dt;
+            }
+          } else {
+            acc = 0; // avoid large backlog while paused
+          }
+
+          // Camera update & render
+          updateCameras();
+          renderer.render(scene, camera);
+
+          // HUD update
+          const kmh = Math.max(0, state.vel.length() * 3.6);
+          hud.speed.textContent = kmh.toFixed(0);
+          hud.time.textContent = state.time.toFixed(2);
+          hud.cp.textContent = String(state.cp);
+          hud.crash.textContent = String(state.crashes);
+
+          state.frameMs = performance.now() - frameStart;
+          if (debugOn) drawDebug();
+
+          requestAnimationFrame(animate);
+        }
+        requestAnimationFrame(animate);
+
+        // =========================
+        // Physics Step
+        // =========================
+        const raycaster = new THREE.Raycaster();
+        const up = new THREE.Vector3(0, 1, 0);
+
+        function stepPhysics(dt) {
+          // Heading from yaw
+          const forward = new THREE.Vector3(
+            Math.cos(state.yaw),
+            0,
+            Math.sin(state.yaw)
+          );
+          const right = new THREE.Vector3()
+            .crossVectors(forward, up)
+            .normalize();
+
+          // Mouse look (FPV)
+          if (state.camMode === "fpv") {
+            state.yaw += state.input.mouseDX * 0.0025;
+            state.pitch = THREE.MathUtils.clamp(
+              state.pitch + state.input.mouseDY * 0.002,
+              -0.9,
+              0.7
+            );
+          }
+          state.input.mouseDX = state.input.mouseDY = 0;
+
+          // Steering from keys/gamepad: adjust yaw; lean for visual
+          const steer = state.input.D - state.input.A;
+          const steerRate =
+            PHYS.maxSteerRate * (1 / (1 + state.vel.length() * 0.08));
+          state.yaw += steer * steerRate * dt;
+          state.roll = THREE.MathUtils.lerp(
+            state.roll,
+            THREE.MathUtils.clamp(
+              -steer * PHYS.maxLean,
+              -PHYS.maxLean,
+              PHYS.maxLean
+            ),
+            0.12
+          );
+
+          // Forces
+          const v = state.vel.clone();
+          const speed = v.length();
+
+          // Gravity
+          const Fg = up.clone().multiplyScalar(-PHYS.mass * PHYS.g);
+
+          // Aerodynamic drag
+          const Fd = v
+            .clone()
+            .multiplyScalar(-0.5 * PHYS.rho * PHYS.cda * speed);
+
+          // Rolling resistance opposite to velocity on ground
+          const Fr = v
+            .clone()
+            .multiplyScalar(
+              (-PHYS.rollCoef * PHYS.mass * PHYS.g) / (speed + 1e-6)
+            );
+
+          // Engine (thrust along forward)
+          const throttle = Math.max(0, state.input.W - 0.0); // no reverse
+          const Fe = forward
+            .clone()
+            .multiplyScalar(PHYS.engineForce * throttle);
+
+          // Braking (opposite velocity direction)
+          const brake = state.input.S;
+          const Fb = v
+            .clone()
+            .multiplyScalar((-PHYS.brakeForce * brake) / (speed + 1e-6));
+
+          // Ground contact via raycast below bike
+          const origin = state.pos.clone();
+          origin.y += 2.0;
+          raycaster.set(origin, new THREE.Vector3(0, -1, 0));
+          raycaster.far = 5.0;
+          const inter = raycaster.intersectObject(groundMesh, true)[0];
+
+          let groundForce = new THREE.Vector3();
+          let stick = false;
+          if (inter) {
+            const depth = Math.max(
+              0,
+              PHYS.susp.rest - (origin.y - inter.point.y)
+            );
+            const relVelY = state.vel.y; // vertical component
+            const Fs = PHYS.susp.k * depth + PHYS.susp.c * -relVelY;
+            groundForce.add(up.clone().multiplyScalar(Fs));
+            state.groundN
+              .copy(inter.face.normal)
+              .transformDirection(groundMesh.matrixWorld)
+              .normalize();
+            state.suspComp = depth;
+            stick = true;
+          } else {
+            state.suspComp = 0;
+          }
+
+          // Tyre lateral slip estimate
+          const heading = forward.clone();
+          const vDir = speed > 1e-3 ? v.clone().normalize() : forward.clone();
+          const slip = Math.asin(
+            THREE.MathUtils.clamp(vDir.clone().cross(heading).y, -1, 1)
+          );
+          state.slipAngle = slip;
+
+          // Lateral friction to align velocity with heading (simplified)
+          const lateral = right.clone().multiplyScalar(right.dot(v));
+          const mu = Math.abs(slip) > 0.35 ? PHYS.mu_d : PHYS.mu_s;
+          const Flat = lateral.multiplyScalar(
+            -mu * PHYS.mass * PHYS.g * (stick ? 1 : 0) * 0.9
+          );
+
+          // Hop impulse
+          if (state.input.SPACE) {
+            state.vel.y += PHYS.hopImpulse / PHYS.mass; // small pop
+          }
+
+          // Sum forces
+          const F = new THREE.Vector3();
+          F.add(Fg).add(Fd).add(Fr).add(Fe).add(Fb).add(groundForce).add(Flat);
+
+          // Integrate
+          const a = F.multiplyScalar(1 / PHYS.mass);
+          state.vel.addScaledVector(a, dt);
+          state.pos.addScaledVector(state.vel, dt);
+
+          // Align to ground normal a bit (for camera/bike roll/pitch visual)
+          if (stick) {
+            const slopeForward = projectOntoPlane(
+              forward,
+              state.groundN
+            ).normalize();
+            const pitchTarget = Math.asin(
+              THREE.MathUtils.clamp(slopeForward.y, -0.5, 0.5)
+            );
+            state.pitch = THREE.MathUtils.lerp(state.pitch, pitchTarget, 0.08);
+          } else {
+            // airborne damping
+            state.pitch *= 0.98;
+            state.roll *= 0.98;
+          }
+
+          // Crash detection
+          const impact = inter
+            ? Math.max(0, -relVelAlong(up, state.vel)) * PHYS.mass * PHYS.g
+            : 0;
+          const tooFastRoll = Math.abs(state.roll) > 1.2 && speed < 2.0; // low-speed tip
+          if (
+            (impact > PHYS.crash.maxImpulse && speed > PHYS.crash.minSpeed) ||
+            tooFastRoll
+          ) {
+            registerCrash();
+          }
+
+          // Checkpoint & finish
+          testCheckpoints();
+
+          // Keep in bounds
+          const half = CFG.world.size * 0.5 - 10;
+          state.pos.x = THREE.MathUtils.clamp(state.pos.x, -half, half);
+          state.pos.z = THREE.MathUtils.clamp(state.pos.z, -half, half);
+
+          // Simple damping to avoid runaway energy
+          state.vel.multiplyScalar(0.999);
+        }
+
+        function relVelAlong(axis, v) {
+          return axis.dot(v);
+        }
+        function projectOntoPlane(v, n) {
+          return v.clone().sub(n.clone().multiplyScalar(v.dot(n)));
+        }
+
+        // =========================
+        // Cameras
+        // =========================
+        function updateCameras() {
+          // Bike visual pose (for third person)
+          bike.position.copy(state.pos);
+          bike.rotation.set(state.pitch, state.yaw, state.roll, "YXZ");
+
+          // FPV camera mounted slightly above/forward
+          const head = new THREE.Vector3(
+            Math.cos(state.yaw),
+            0,
+            Math.sin(state.yaw)
+          );
+          const eye = state.pos
+            .clone()
+            .add(new THREE.Vector3(0, 1.55, 0))
+            .add(head.clone().multiplyScalar(0.2));
+
+          // Speed-based FOV
+          const speed = state.vel.length();
+          const targetFov =
+            CFG.view.fovBase +
+            THREE.MathUtils.clamp(speed * 3.6, 0, 80) * CFG.view.fovBySpeed;
+          camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.1);
+          camera.updateProjectionMatrix();
+
+          if (state.camMode === "fpv") {
+            camera.position.copy(eye);
+            camera.rotation.set(
+              state.pitch + state.roll * 0.08,
+              state.yaw,
+              0,
+              "YXZ"
+            );
+          } else {
+            // Third-person: spring arm
+            const back = head.clone().multiplyScalar(-3.2);
+            const upv = new THREE.Vector3(0, 1.6, 0);
+            const target = state.pos.clone().add(upv);
+            const desired = target.clone().add(back);
+            thirdCam.position.lerp(desired, 0.12);
+            camera.position.copy(thirdCam.position);
+            camera.lookAt(target);
+          }
+        }
+
+        function toggleCam() {
+          state.camMode = state.camMode === "fpv" ? "third" : "fpv";
+        }
+
+        // =========================
+        // Terrain & Trail
+        // =========================
+        function buildTerrain(size, segs, seed) {
+          const geo = new THREE.PlaneGeometry(size, size, segs, segs);
+          geo.rotateX(-Math.PI / 2);
+
+          const noise = makePerlin(seed);
+          const verts = geo.attributes.position;
+
+          // Trail spline across the mountain
+          const pts = [];
+          const half = size / 2;
+          for (let i = 0; i < 12; i++) {
+            const t = i / 11;
+            // meandering path across the square
+            const x = -half + 80 + t * (size - 160);
+            const z =
+              -half +
+              80 +
+              (Math.sin(t * 3.2 + 0.7) * 0.3 + Math.sin(t * 1.1) * 0.2) *
+                (size - 220);
+            pts.push(new THREE.Vector3(x, 0, z));
+          }
+          const trail = new THREE.CatmullRomCurve3(pts);
+          trail.curveType = "catmullrom";
+          trail.tension = 0.35;
+
+          // Height function
+          function H(x, z) {
+            const nx = (x / size) * 2.2,
+              nz = (z / size) * 2.2;
+            const base = 60 * noise.fbm(nx, nz, 4, 2.0, 0.5);
+            const ridges =
+              28 * Math.abs(noise.noise(nx * 0.9 + 100, nz * 0.9 - 50));
+            return base + ridges;
+          }
+
+          // Carve the trail by lowering height near spline
+          const tw = CFG.world.trailWidth;
+          for (let i = 0; i < verts.count; i++) {
+            const vx = verts.getX(i),
+              vz = verts.getZ(i);
+            const h = H(vx, vz);
+            const closest = closestPointOnCurve(
+              trail,
+              new THREE.Vector3(vx, 0, vz)
+            );
+            let y = h;
+            if (closest.dist < tw * 1.6) {
+              const carve =
+                Math.cos(Math.min(Math.PI, (closest.dist / tw) * Math.PI)) * 8; // berm dip
+              y = h - carve - 4;
+            }
+            verts.setY(i, y);
+          }
+          verts.needsUpdate = true;
+          geo.computeVertexNormals();
+
+          return { geo, trail };
+        }
+
+        function buildGate(pos, tan) {
+          const arch = new THREE.TorusGeometry(4, 0.25, 10, 24, Math.PI);
+          const mat = new THREE.MeshStandardMaterial({
+            color: 0xffe14d,
+            roughness: 0.5,
+          });
+          const m = new THREE.Mesh(arch, mat);
+          m.castShadow = true;
+          m.receiveShadow = true;
+          m.position.copy(pos).y += 3.0;
+          const yaw = Math.atan2(tan.z, tan.x) + Math.PI / 2;
+          m.rotation.y = yaw;
+          return m;
+        }
+
+        function buildCheckpoints(trail, count) {
+          const arr = [];
+          for (let i = 1; i <= count; i++) {
+            const t = i / (count + 1);
+            const p = trail.getPointAt(t);
+            const g = buildGate(p, trail.getTangentAt(t));
+            g.userData.t = t;
+            arr.push(g);
+          }
+          return arr;
+        }
+
+        function closestPointOnCurve(curve, point) {
+          // coarse search along segments
+          const steps = 200;
+          let bestT = 0,
+            bestD = Infinity,
+            bestP = null;
+          for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const p = curve.getPointAt(t);
+            const d = p.distanceToSquared(point);
+            if (d < bestD) {
+              bestD = d;
+              bestT = t;
+              bestP = p;
+            }
+          }
+          return { t: bestT, p: bestP, dist: Math.sqrt(bestD) };
+        }
+
+        // =========================
+        // Game Flow
+        // =========================
+        function startGame() {
+          show(hud.menu, false);
+          state.running = true;
+          state.paused = false;
+          state.finished = false;
+          state.time = 0;
+          state.crashes = 0;
+          state.cp = 0;
+          if (!document.pointerLockElement)
+            renderer.domElement.requestPointerLock();
+        }
+
+        function togglePause(force) {
+          if (typeof force === "boolean") state.paused = !force ? false : true;
+          else state.paused = !state.paused;
+          show(hud.pause, state.paused);
+          if (state.paused && document.pointerLockElement)
+            document.exitPointerLock();
+          if (!state.paused && state.running && state.camMode === "fpv")
+            renderer.domElement.requestPointerLock();
+        }
+
+        function teleportToStart() {
+          const p0 = terrain.trail.getPointAt(0.01);
+          const t0 = terrain.trail.getTangentAt(0.01);
+          state.pos.copy(p0).y += 3.0;
+          state.vel.set(0, 0, 0);
+          state.yaw = Math.atan2(t0.z, t0.x);
+          state.pitch = 0;
+          state.roll = 0;
+          state.cp = 0;
+          state.finished = false;
+          state.time = 0;
+        }
+
+        function restartRun() {
+          teleportToStart();
+        }
+
+        function registerCrash() {
+          state.crashes++;
+          // Simple tumble effect: brief fade & reset to last checkpoint position
+          const fade = document.getElementById("finishBanner");
+          fade.textContent = "CRASH";
+          fade.style.display = "flex";
+          setTimeout(() => {
+            fade.style.display = "none";
+            respawnAtCheckpoint();
+          }, 500);
+        }
+
+        function respawnAtCheckpoint() {
+          const t = state.cp > 0 ? cps[state.cp - 1].userData.t : 0.01;
+          const p = terrain.trail.getPointAt(t);
+          const k = terrain.trail.getTangentAt(t);
+          state.pos.copy(p).y += 3.0;
+          state.vel.set(0, 0, 0);
+          state.yaw = Math.atan2(k.z, k.x);
+          state.pitch = 0;
+          state.roll = 0;
+        }
+
+        function testCheckpoints() {
+          if (state.finished) return;
+          const p = state.pos;
+          // next checkpoint index
+          if (state.cp < cps.length) {
+            const g = cps[state.cp];
+            if (g.position.distanceTo(p) < 6.5) {
+              state.cp++;
+            }
+          } else {
+            // check finish
+            if (finishGate.position.distanceTo(p) < 6.5) {
+              state.finished = true;
+              show(hud.finish, true);
+              if (document.pointerLockElement) document.exitPointerLock();
+              setTimeout(() => show(hud.finish, false), 1600);
+            }
+          }
+        }
+
+        // =========================
+        // Quality presets
+        // =========================
+        function applyQuality(q) {
+          CFG.quality.preset = q;
+          if (q === "low") {
+            renderer.shadowMap.enabled = false;
+            scene.fog.density = 0.0009;
+            sun.intensity = 0.9;
+          } else if (q === "medium") {
+            renderer.shadowMap.enabled = true;
+            sun.shadow.mapSize.set(1024, 1024);
+            scene.fog.density = 0.0007;
+            sun.intensity = 1.2;
+          } else if (q === "high") {
+            renderer.shadowMap.enabled = true;
+            sun.shadow.mapSize.set(4096, 4096);
+            scene.fog.density = 0.0005;
+            sun.intensity = 1.4;
+          }
+        }
+
+        function resetDefaults() {
+          hud.sens.value = "1";
+          state.input.sens = 1;
+          hud.invertY.checked = false;
+          state.input.invertY = false;
+          hud.quality.value = "medium";
+          applyQuality("medium");
+          hud.volume.value = "0.4";
+        }
+
+        // =========================
+        // Gamepad
+        // =========================
+        function pollGamepad() {
+          const gp = navigator.getGamepads ? navigator.getGamepads()[0] : null;
+          if (!gp) return;
+          // Axes: 0/1 LS, 2/3 RS; Buttons: 0 A, 6 LT, 7 RT
+          const steer = gp.axes[0] || 0; // -1..1
+          const lookX = gp.axes[2] || 0;
+          const lookY = gp.axes[3] || 0;
+          const throttle = (gp.buttons[7] && gp.buttons[7].value) || 0; // RT
+          const brake = (gp.buttons[6] && gp.buttons[6].value) || 0; // LT
+          const hop = gp.buttons[0] && gp.buttons[0].pressed ? 1 : 0;
+
+          // Merge with keyboard
+          state.input.W = Math.max(state.input.W, throttle);
+          state.input.S = Math.max(state.input.S, brake);
+          // steering additive
+          state.yaw += steer * PHYS.maxSteerRate * 0.5 * PHYS.dt; // mild assist
+          state.input.SPACE = Math.max(state.input.SPACE, hop);
+
+          if (state.camMode === "fpv") {
+            state.input.mouseDX += lookX * 8;
+            state.input.mouseDY += (hud.invertY.checked ? -1 : 1) * lookY * 8;
+          }
+        }
+
+        // =========================
+        // Debug overlay
+        // =========================
+        let debugOn = false;
+        function toggleDebug() {
+          debugOn = !debugOn;
+          hud.debug.style.display = debugOn ? "block" : "none";
+        }
+        function drawDebug() {
+          const s = state;
+          hud.debug.textContent = [
+            `fps frame: ${Math.max(1, (1000 / s.frameMs) | 0)}  frame ${s.frameMs.toFixed(2)} ms  phys ${s.physMs.toFixed(2)} ms`,
+            `pos: ${s.pos.x.toFixed(1)}, ${s.pos.y.toFixed(1)}, ${s.pos.z.toFixed(1)}`,
+            `vel: ${s.vel.length().toFixed(2)} m/s  yaw:${s.yaw.toFixed(2)} pitch:${s.pitch.toFixed(2)} roll:${s.roll.toFixed(2)}`,
+            `slipAngle: ${(s.slipAngle * 57.2958).toFixed(1)} deg  susp: ${(s.suspComp * 100).toFixed(1)} cm`,
+            `cp: ${s.cp}/${s.cpMax} crashes: ${s.crashes}`,
+          ].join("\n");
+        }
+
+        // =========================
+        // Utilities: Seeded Perlin
+        // =========================
+        function getSeed() {
+          const url = new URL(location.href);
+          const s = url.searchParams.get("seed");
+          return s
+            ? Number(s)
+            : Math.abs(hashStr(location.pathname)) % 100000 | 0;
+        }
+        function hashStr(str) {
+          let h = 2166136261 >>> 0;
+          for (let i = 0; i < str.length; i++) {
+            h ^= str.charCodeAt(i);
+            h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
+          }
+          return h >>> 0;
+        }
+
+        function makePerlin(seed) {
+          // Lightweight 2D Perlin + FBM
+          const p = new Uint8Array(512);
+          const rnd = mulberry32(seed || 1);
+          for (let i = 0; i < 256; i++) p[i] = i;
+          for (let i = 255; i > 0; i--) {
+            const j = (rnd() * 256) | 0;
+            const t = p[i];
+            p[i] = p[j];
+            p[j] = t;
+          }
+          for (let i = 0; i < 256; i++) p[i + 256] = p[i];
+
+          function grad2(hash, x, y) {
+            const h = hash & 3; // 4 dirs
+            const u = h < 2 ? x : y;
+            const v = h < 2 ? y : x;
+            return (h & 1 ? -u : u) + (h & 2 ? -2 * v : 2 * v);
+          }
+          function fade(t) {
+            return t * t * t * (t * (t * 6 - 15) + 10);
+          }
+          function lerp(a, b, t) {
+            return a + (b - a) * t;
+          }
+
+          function noise(x, y) {
+            const X = Math.floor(x) & 255;
+            const Y = Math.floor(y) & 255;
+            const xf = x - Math.floor(x);
+            const yf = y - Math.floor(y);
+            const u = fade(xf),
+              v = fade(yf);
+            const aa = p[p[X] + Y],
+              ab = p[p[X] + Y + 1];
+            const ba = p[p[X + 1] + Y],
+              bb = p[p[X + 1] + Y + 1];
+            const x1 = lerp(grad2(aa, xf, yf), grad2(ba, xf - 1, yf), u);
+            const x2 = lerp(
+              grad2(ab, xf, yf - 1),
+              grad2(bb, xf - 1, yf - 1),
+              u
+            );
+            return (lerp(x1, x2, v) + 1) / 2; // 0..1
+          }
+          function fbm(x, y, oct = 4, lac = 2.0, gain = 0.5) {
+            let amp = 1,
+              freq = 1,
+              sum = 0,
+              norm = 0;
+            for (let i = 0; i < oct; i++) {
+              sum += amp * noise(x * freq, y * freq);
+              norm += amp;
+              amp *= gain;
+              freq *= lac;
+            }
+            return sum / norm;
+          }
+          return { noise, fbm };
+        }
+
+        function mulberry32(a) {
+          return function () {
+            let t = (a += 0x6d2b79f5);
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+        }
+
+        // =========================
+        // Exposed testing hooks
+        // =========================
+        window.__dbg = {
+          reset: () => restartRun(),
+          teleportToCheckpoint: (i) => {
+            const clamped = Math.max(0, Math.min(i | 0, cps.length));
+            state.cp = clamped;
+            respawnAtCheckpoint();
+          },
+          setSeed: (n) => {
+            location.search = `?seed=${Number(n) || 0}`;
+          },
+          setParam: (k, v) => {
+            if (k in PHYS) {
+              PHYS[k] = v;
+            }
+          },
+        };
+
+        // =========================
+        // Resize
+        // =========================
+        window.addEventListener("resize", () => {
+          camera.aspect = window.innerWidth / window.innerHeight;
+          camera.updateProjectionMatrix();
+          renderer.setSize(innerWidth, innerHeight);
+        });
+
+        // Show main menu initially
+        show(hud.menu, true);
+
+        // Helpers
+        function show(el, on) {
+          el.style.display = on ? "flex" : "none";
+        }
+
+        // =========================
+        // Minimal Self-tests (added)
+        // =========================
+        (function runSelfTests() {
+          const results = [];
+          const assert = (name, cond) => {
+            results.push(`${cond ? "✅" : "❌"} ${name}`);
+            if (!cond) console.error("Test failed:", name);
+          };
+          try {
+            assert(
+              "THREE loaded",
+              typeof THREE === "object" && !!THREE.WebGLRenderer
+            );
+            assert("Scene created", scene && scene.isScene === true);
+            assert("Renderer context", !!renderer.getContext());
+            assert(
+              "Terrain geometry",
+              terrain.geo &&
+                terrain.geo.attributes &&
+                terrain.geo.attributes.position
+            );
+            assert("Checkpoint count", cps.length === CFG.world.cpCount);
+            const prevFog = scene.fog.density;
+            applyQuality("low");
+            const lowFog = scene.fog.density;
+            applyQuality("high");
+            const highFog = scene.fog.density;
+            assert("Quality changes fog density", lowFog !== highFog);
+            const prevMode = state.camMode;
+            toggleCam();
+            const toggled = state.camMode !== prevMode;
+            toggleCam();
+            assert("Camera toggles", toggled);
+          } catch (e) {
+            results.push("❌ Exception during tests: " + (e && e.message));
+            console.error(e);
+          }
+          hud.testsResult.textContent = results.join(" | ");
+        })();
+      })();
+    </script>
+  </body>
+</html>
