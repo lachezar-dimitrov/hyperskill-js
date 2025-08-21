@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Music Recommendation Demo</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 2em;
+        background: #f5f5f5;
+      }
+      h1 {
+        margin-bottom: 0.2em;
+      }
+      .genre {
+        margin: 0.5em 0;
+      }
+      .song-list {
+        margin-top: 2em;
+      }
+      .song {
+        margin-bottom: 1em;
+        background: white;
+        padding: 1em;
+        border-radius: 8px;
+      }
+      button {
+        margin-top: 1em;
+      }
+      pre {
+        background: #eee;
+        padding: 0.5em;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🎧 Music Recommender</h1>
+    <p>Adjust your genre preferences:</p>
+
+    <div id="user-inputs"></div>
+    <button onclick="recommendSong()">🔍 Recommend Song</button>
+
+    <div class="song-list" id="recommendation"></div>
+
+    <script>
+      const genres = ["Rock", "Classical", "Pop", "Jazz", "Blues"];
+      let userProfile = [8, 2, 5, 7, 4]; // initial user profile
+
+      const songs = [
+        { name: "Symphony No. 5", vector: [0.1, 1.0, 0.1, 0.2, 0.1] },
+        { name: "Smooth Jazz Cafe", vector: [0.2, 0.2, 0.2, 1.0, 0.4] },
+        { name: "Rock You Loud", vector: [1.0, 0.0, 0.3, 0.1, 0.1] },
+        { name: "Bluesy Evening", vector: [0.1, 0.1, 0.1, 0.3, 1.0] },
+        { name: "Pop Hit 2025", vector: [0.3, 0.1, 1.0, 0.2, 0.2] },
+      ];
+
+      // Create input sliders
+      const inputsDiv = document.getElementById("user-inputs");
+      genres.forEach((genre, i) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "genre";
+        wrapper.innerHTML = `
+        <label>${genre}:
+          <input type="range" min="0" max="10" step="1" value="${userProfile[i]}"
+                 onchange="updateProfile(${i}, this.value)">
+          <span id="val-${i}">${userProfile[i]}</span>
+        </label>
+      `;
+        inputsDiv.appendChild(wrapper);
+      });
+
+      window.updateProfile = function (index, value) {
+        userProfile[index] = parseInt(value);
+        document.getElementById(`val-${index}`).textContent = value;
+      };
+
+      function cosineSimilarity(a, b) {
+        const dot = a.reduce((sum, ai, i) => sum + ai * b[i], 0);
+        const magA = Math.sqrt(a.reduce((sum, ai) => sum + ai * ai, 0));
+        const magB = Math.sqrt(b.reduce((sum, bi) => sum + bi * bi, 0));
+        return dot / (magA * magB);
+      }
+
+      function recommendSong() {
+        const results = songs
+          .map((song) => ({
+            ...song,
+            similarity: cosineSimilarity(userProfile, song.vector),
+          }))
+          .sort((a, b) => b.similarity - a.similarity);
+
+        const top = results[0];
+        const div = document.getElementById("recommendation");
+        div.innerHTML = `
+        <h2>🎵 Recommended: ${top.name}</h2>
+        <p>Cosine similarity: <strong>${top.similarity.toFixed(3)}</strong></p>
+        <p>Genre vector: [${top.vector.join(", ")}]</p>
+        <button onclick="listenToSong([${top.vector.join(",")}])">🎧 Listen</button>
+        <h3>All Songs:</h3>
+        ${results
+          .map(
+            (s) => `
+          <div class="song">
+            <strong>${s.name}</strong><br/>
+            Similarity: ${s.similarity.toFixed(3)}<br/>
+            Vector: [${s.vector.join(", ")}]
+          </div>
+        `
+          )
+          .join("")}
+      `;
+      }
+
+      function listenToSong(songVector) {
+        const alpha = 0.5;
+        userProfile = userProfile.map((val, i) => val + alpha * songVector[i]);
+        userProfile = userProfile.map((x) => Math.min(10, Math.round(x))); // cap at 10
+        genres.forEach((_, i) => {
+          document.querySelector(`#val-${i}`).textContent = userProfile[i];
+          document.querySelectorAll("input")[i].value = userProfile[i];
+        });
+        alert("🎶 You listened to the song! Your profile has evolved.");
+        recommendSong();
+      }
+    </script>
+  </body>
+</html>
