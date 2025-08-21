@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Canvas Buzz Lab</title>
+        <style>
+            html,
+            body {
+                margin: 0;
+                height: 100%;
+                background: #0e1020;
+                color: #e9edf6;
+                font-family:
+                    Inter,
+                    system-ui,
+                    Segoe UI,
+                    Roboto,
+                    Arial;
+            }
+            canvas {
+                display: block;
+                width: 100vw;
+                height: 100vh;
+            }
+            /* Prevent text selection while dragging sliders */
+            * {
+                user-select: none;
+                -webkit-user-select: none;
+            }
+        </style>
+    </head>
+    <body>
+        <canvas id="ui"></canvas>
+        <script>
+            (() => {
+                // ---------- Canvas & DPR ----------
+                const cvs = document.getElementById("ui");
+                const ctx2d = cvs.getContext("2d");
+                function resize() {
+                    const dpr = Math.max(1, window.devicePixelRatio || 1);
+                    cvs.width = Math.floor(innerWidth * dpr);
+                    cvs.height = Math.floor(innerHeight * dpr);
+                    cvs.style.width = innerWidth + "px";
+                    cvs.style.height = innerHeight + "px";
+                    S.layout(cvs.width, cvs.height, dpr);
+                    draw();
+                }
+                window.addEventListener("resize", resize);
+
+                // ---------- Audio graph ----------
+                let AC, master, lp, analyser;
+                let sources = [];
+                function ensureAC() {
+                    if (AC) return;
+                    AC = new (window.AudioContext || window.webkitAudioContext)();
+                    master = AC.createGain();
+                    master.gain.value = dbToGain(S.state.gainDb);
+                    lp = AC.createBiquadFilter();
+                    lp.type = "lowpass";
+                    lp.frequency.value = S.state.lpf;
+                    analyser = AC.createAnalyser();
+                    analyser.fftSize = 1024;
+                    lp.connect(master);
+                    master.connect(analyser);
+                    analyser.connect(AC.destination);
+                }
+                function dbToGain(db) {
+                    return Math.pow(10, db / 20);
+                }
+                function stopAll() {
+                    sources.forEach((n) => {
+                        try {
+                            n.stop?.();
+                            n.disconnect?.();
+                        } catch {}
+                    });
+                    sources.length = 0;
+                }
+                function envOn(g) {
+                    const now = AC.currentTime;
+                    g.gain.cancelScheduledValues(now);
+                    g.gain.setValueAtTime(0.0001, now);
+                    g.gain.exponentialRampToValueAtTime(1, now + 0.01);
+                }
+                function applyGlobals() {
+                    if (!AC) return;
+                    master.gain.setTargetAtTime(dbToGain(S.state.gainDb), AC.currentTime, 0.02);
+                    lp.frequency.setTargetAtTime(S.state.lpf, AC.currentTime, 0.02);
+                }
+
+                // Generators
+                function oscBasic(type, f) {
+                    const o = AC.createOscillator();
+                    o.type = type;
+                    o.frequency.value = f;
+                    const g = AC.createGain();
+                    g.gain.value = 0.0001;
+                    o.connect(g).connect(lp);
+                    o.start();
+                    envOn(g);
+                    sources.push(o, g);
+                }
+                function noise(kind = "white") {
+                    const g = AC.createGain();
+                    g.gain.value = 0.0001;
+                    g.connect(lp);
+                    const len = AC.sampleRate * 2;
+                    const buf = AC.createBuffer(1, len, AC.sampleRate);
+                    const d = buf.getChannelData(0);
+                    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+                    if (kind !== "white") {
+                        let b0 = 0;
+                        for (let i = 0; i < len; i++) {
+                            if (kind === "brown") {
+                                b0 = (b0 + d[i]) * 0.5;
+                                d[i] = b0;
+                            }
+                            if (kind === "pink") {
+                                b0 = 0.97 * b0 + 0.03 * d[i];
+                                d[i] = b0;
+                            }
+                        }
+                    }
+                    const src = AC.createBufferSource();
+                    src.buffer = buf;
+                    src.loop = true;
+                    src.connect(g);
+                    src.start();
+                    envOn(g);
+                    sources.push(src, g);
+                }
+                function am(f, rate, depth) {
+                    const o = AC.createOscillator();
+                    o.type = "square";
+                    o.frequency.value = f;
+                    const g = AC.createGain();
+                    g.gain.value = 0.0001;
+                    o.connect(g).connect(lp);
+                    const lfo = AC.createOscillator();
+                    lfo.type = "sine";
+                    lfo.frequency.value = rate;
+                    const lfoG = AC.createGain();
+                    lfoG.gain.value = depth;
+                    lfo.connect(lfoG).connect(g.gain);
+                    o.start();
+                    lfo.start();
+                    envOn(g);
+                    sources.push(o, g, lfo, lfoG);
+                }
+                function fm(f, rate, depthHz) {
+                    const o = AC.createOscillator();
+                    o.type = "sawtooth";
+                    o.frequency.value = f;
+                    const g = AC.createGain();
+                    g.gain.value = 0.0001;
+                    o.connect(g).connect(lp);
+                    const lfo = AC.createOscillator();
+                    lfo.type = "sine";
+                    lfo.frequency.value = rate;
+                    const lfoG = AC.createGain();
+                    lfoG.gain.value = depthHz;
+                    lfo.connect(lfoG).connect(o.frequency);
+                    o.start();
+                    lfo.start();
+                    envOn(g);
+                    sources.push(o, g, lfo, lfoG);
+                }
+                function chirp(from, to, sec) {
+                    const o = AC.createOscillator();
+                    o.type = "triangle";
+                    o.frequency.value = from;
+                    const g = AC.createGain();
+                    g.gain.value = 0.0001;
+                    o.connect(g).connect(lp);
+                    const t0 = AC.currentTime;
+                    o.frequency.linearRampToValueAtTime(to, t0 + sec);
+                    o.start();
+                    envOn(g);
+                    sources.push(o, g);
+                }
+
+                function startCurrent() {
+                    ensureAC();
+                    stopAll();
+                    const s = S.state;
+                    applyGlobals();
+                    switch (s.mode) {
+                        case "Sine":
+                        case "Square":
+                        case "Saw":
+                        case "Triangle":
+                            oscBasic(s.mode.toLowerCase(), s.freq);
+                            break;
+                        case "Noise":
+                            noise(s.noiseKind);
+                            break;
+                        case "AM":
+                            am(s.freq, s.modRate, s.modDepth);
+                            break;
+                        case "FM":
+                            fm(s.freq, s.modRate, s.freq * s.modDepth);
+                            break;
+                        case "Chirp":
+                            chirp(s.freq, s.chirpTo, s.chirpSec);
+                            break;
+                    }
+                }
+
+                // ---------- State & Canvas UI widgets ----------
+                const S = {
+                    dpr: 1,
+                    rects: {}, // interactive hitboxes
+                    state: {
+                        running: false,
+                        mode: "Sine",
+                        freq: 220,
+                        gainDb: -14,
+                        lpf: 12000,
+                        modRate: 5,
+                        modDepth: 0.6,
+                        noiseKind: "white",
+                        chirpTo: 1200,
+                        chirpSec: 1.4,
+                    },
+                    layout(w, h, dpr) {
+                        this.dpr = dpr;
+                        this.rects = {};
+                        // Panels
+                        this.pad = 20 * dpr;
+                        this.leftW = Math.min(460 * dpr, w * 0.45);
+                        this.rightX = this.leftW + this.pad;
+                        this.h = h;
+                        this.w = w;
+                        // Slots
+                        let y = this.pad;
+                        this.rects.title = {
+                            x: this.pad,
+                            y: y,
+                            w: this.leftW - 2 * this.pad,
+                            h: 40 * dpr,
+                        };
+                        y += 56 * dpr;
+                        // Mode buttons row
+                        const modes = ["Sine", "Square", "Saw", "Triangle", "Noise", "AM", "FM", "Chirp"];
+                        const bw = Math.floor((this.leftW - 3 * this.pad) / 2);
+                        const bh = 36 * dpr;
+                        modes.forEach((m, i) => {
+                            const row = Math.floor(i / 2),
+                                col = i % 2;
+                            const x = this.pad + col * (bw + this.pad);
+                            const ry = y + row * (bh + 10 * dpr);
+                            this.rects["mode_" + m] = { x, y: ry, w: bw, h: bh, label: m };
+                        });
+                        y += Math.ceil(modes.length / 2) * (bh + 10 * dpr) + 10 * dpr;
+
+                        // Sliders
+                        function r(key, label) {
+                            const rr = {
+                                x: S.pad,
+                                y: y,
+                                w: S.leftW - 2 * S.pad,
+                                h: 26 * dpr,
+                                label,
+                            };
+                            S.rects[key] = rr;
+                            y += 44 * dpr;
+                        }
+                        r("freq", "Frequency (Hz)");
+                        r("gain", "Gain (dB)");
+                        r("lpf", "Low-pass (Hz)");
+
+                        // Conditional sliders
+                        r("modRate", "Mod Rate (Hz)");
+                        r("modDepth", "Mod Depth (0–1)");
+                        r("chirpTo", "Chirp to (Hz)");
+                        r("chirpSec", "Chirp time (s)");
+                        r("noiseKind", "Noise type");
+
+                        // Transport
+                        this.rects.play = {
+                            x: this.pad,
+                            y: y,
+                            w: (this.leftW - 3 * this.pad) / 2,
+                            h: 42 * dpr,
+                            label: "Start/Stop",
+                        };
+                        this.rects.vibrate = {
+                            x: this.pad + this.rects.play.w + this.pad,
+                            y: y,
+                            w: (this.leftW - 3 * this.pad) / 2,
+                            h: 42 * dpr,
+                            label: "Device Vibrate",
+                        };
+                        // Scope area
+                        this.scope = {
+                            x: this.rightX,
+                            y: this.pad,
+                            w: this.w - this.rightX - this.pad,
+                            h: this.h - 2 * this.pad,
+                        };
+                    },
+                };
+
+                // Slider helpers
+                function sliderDraw(r, val, min, max, format = (x) => x.toFixed(0), disabled = false) {
+                    const c = ctx2d;
+                    const { x, y, w, h } = r;
+                    const pct = (val - min) / (max - min);
+                    c.save();
+                    c.fillStyle = disabled ? "#1a2037" : "#121634";
+                    roundRect(c, x, y, w, h, 8);
+                    c.fill();
+
+                    // track
+                    c.fillStyle = disabled ? "#273055" : "#1f2550";
+                    roundRect(c, x + 2, y + 2, w - 4, h - 4, 6);
+                    c.fill();
+
+                    // filled
+                    c.fillStyle = disabled ? "#3b4a7f" : "#69e0ff";
+                    roundRect(c, x + 2, y + 2, Math.max(12, (w - 4) * pct), h - 4, 6);
+                    c.fill();
+
+                    // knob
+                    const kx = x + 2 + (w - 4) * pct;
+                    c.fillStyle = disabled ? "#6573a8" : "#a6f0ff";
+                    roundRect(c, kx - 8, y + 2, 16, h - 4, 6);
+                    c.fill();
+
+                    // label & value
+                    c.fillStyle = disabled ? "#7f8dbb" : "#cbd5f5";
+                    c.font = 14 * S.dpr + "px Inter,system-ui";
+                    c.textBaseline = "bottom";
+                    c.fillText(r.label, x, y - 6);
+                    c.textBaseline = "middle";
+                    c.fillStyle = "#e9edf6";
+                    c.fillText(format(val), x + w - 4 - c.measureText(format(val)).width, y + h / 2);
+                    c.restore();
+                }
+                function buttonDraw(r, active = false, label = r.label) {
+                    const c = ctx2d;
+                    const { x, y, w, h } = r;
+                    c.save();
+                    c.fillStyle = active ? "#1b7fff" : "#141a38";
+                    roundRect(c, x, y, w, h, 8);
+                    c.fill();
+                    c.strokeStyle = active ? "#4fd3ff" : "#232a58";
+                    c.lineWidth = 2;
+                    roundRect(c, x + 1, y + 1, w - 2, h - 2, 7);
+                    c.stroke();
+                    c.fillStyle = active ? "#05101f" : "#dbe5ff";
+                    c.font = 16 * S.dpr + "px Inter,system-ui";
+                    c.textAlign = "center";
+                    c.textBaseline = "middle";
+                    c.fillText(label, x + w / 2, y + h / 2);
+                    c.restore();
+                }
+                function tagButton(r, label, selected) {
+                    buttonDraw(r, selected, label);
+                }
+                function roundRect(c, x, y, w, h, r) {
+                    c.beginPath();
+                    c.moveTo(x + r, y);
+                    c.lineTo(x + w - r, y);
+                    c.quadraticCurveTo(x + w, y, x + w, y + r);
+                    c.lineTo(x + w, y + h - r);
+                    c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+                    c.lineTo(x + r, y + h);
+                    c.quadraticCurveTo(x, y + h, x, y + h - r);
+                    c.lineTo(x, y + r);
+                    c.quadraticCurveTo(x, y, x + r, y);
+                    c.closePath();
+                }
+
+                // Drawing
+                function draw() {
+                    const c = ctx2d;
+                    c.clearRect(0, 0, cvs.width, cvs.height);
+                    // Left panel background
+                    c.fillStyle = "#101432";
+                    c.fillRect(0, 0, S.leftW, S.h);
+
+                    // Title
+                    c.fillStyle = "#9aa6c8";
+                    c.font = 14 * S.dpr + "px Inter,system-ui";
+                    c.fillText("Canvas Buzz Lab", S.pad, S.pad + 14 * S.dpr);
+                    c.fillStyle = "#e9edf6";
+                    c.font = 22 * S.dpr + "px Inter,system-ui";
+                    c.fillText("Web buzzing synthesiser", S.pad, S.pad + 14 * S.dpr + 28 * S.dpr);
+
+                    // Mode buttons
+                    ["Sine", "Square", "Saw", "Triangle", "Noise", "AM", "FM", "Chirp"].forEach((m) => {
+                        const r = S.rects["mode_" + m];
+                        tagButton(r, m, S.state.mode === m);
+                    });
+
+                    // Sliders (enable/disable contextually)
+                    const st = S.state;
+                    const isMod = st.mode === "AM" || st.mode === "FM";
+                    const isChirp = st.mode === "Chirp";
+                    const isNoise = st.mode === "Noise";
+
+                    sliderDraw(S.rects.freq, st.freq, 20, 2000, (v) => v.toFixed(0) + " Hz", false === isNoise);
+                    sliderDraw(S.rects.gain, st.gainDb, -40, 0, (v) => v.toFixed(0) + " dB");
+                    sliderDraw(S.rects.lpf, st.lpf, 200, 12000, (v) => v.toFixed(0) + " Hz");
+
+                    sliderDraw(
+                        S.rects.modRate,
+                        st.modRate,
+                        0.1,
+                        50,
+                        (v) => v.toFixed(1) + " Hz",
+                        !isMod && st.mode !== "Chirp",
+                    );
+                    sliderDraw(S.rects.modDepth, st.modDepth, 0, 1, (v) => v.toFixed(2), !isMod && st.mode !== "FM");
+                    sliderDraw(S.rects.chirpTo, st.chirpTo, 20, 4000, (v) => v.toFixed(0) + " Hz", !isChirp);
+                    sliderDraw(S.rects.chirpSec, st.chirpSec, 0.05, 10, (v) => v.toFixed(2) + " s", !isChirp);
+
+                    // Noise kind pseudo-slider as a segmented button
+                    const nr = S.rects.noiseKind;
+                    const seg = ["white", "pink", "brown"];
+                    const segW = Math.floor((nr.w - 16 * S.dpr) / seg.length);
+                    for (let i = 0; i < seg.length; i++) {
+                        const rr = {
+                            x: nr.x + i * (segW + 8 * S.dpr),
+                            y: nr.y,
+                            w: segW,
+                            h: nr.h,
+                            label: seg[i],
+                        };
+                        buttonDraw(rr, st.noiseKind === seg[i], seg[i]);
+                        S.rects["noiseSeg_" + i] = rr;
+                    }
+                    // Transport
+                    buttonDraw(S.rects.play, st.running, st.running ? "Stop" : "Start");
+                    buttonDraw(S.rects.vibrate, false, "Device Vibrate");
+
+                    // Scope
+                    drawScope();
+                    requestAnimationFrame(draw);
+                }
+
+                function drawScope() {
+                    const c = ctx2d,
+                        r = S.scope;
+                    // panel
+                    c.save();
+                    c.fillStyle = "#0a0d22";
+                    roundRect(c, r.x, r.y, r.w, r.h, 14);
+                    c.fill();
+                    c.strokeStyle = "#1e2a55";
+                    c.lineWidth = 2;
+                    roundRect(c, r.x + 1, r.y + 1, r.w - 2, r.h - 2, 13);
+                    c.stroke();
+
+                    // Title
+                    c.fillStyle = "#a3b1de";
+                    c.font = 14 * S.dpr + "px Inter,system-ui";
+                    c.fillText("Spectrum (FFT) + peak meter", r.x + 16 * S.dpr, r.y + 22 * S.dpr);
+
+                    if (!analyser) {
+                        c.restore();
+                        return;
+                    }
+                    const buf = new Uint8Array(analyser.frequencyBinCount);
+                    analyser.getByteFrequencyData(buf);
+                    // bars
+                    const pad = 16 * S.dpr;
+                    const w = r.w - 2 * pad,
+                        h = r.h - 3 * pad - 24 * S.dpr;
+                    const x0 = r.x + pad,
+                        y0 = r.y + 2 * pad + 24 * S.dpr;
+                    const bars = 160;
+                    const step = Math.max(1, Math.floor(buf.length / bars));
+                    for (let i = 0; i < bars; i++) {
+                        const v = buf[i * step] / 255;
+                        const bh = v * h;
+                        const bx = x0 + i * (w / bars);
+                        const by = y0 + (h - bh);
+                        c.fillStyle = "#69e0ff";
+                        c.fillRect(bx, by, Math.max(1, w / bars - 2), bh);
+                    }
+                    // Peak meter
+                    const peak = Math.sqrt(buf.reduce((s, x) => s + (x / 255) ** 2, 0) / buf.length);
+                    const meterW = Math.max(10, (r.w - 2 * pad) * Math.min(1, peak));
+                    c.fillStyle = "#193bff33";
+                    c.fillRect(r.x + pad, r.y + r.h - pad - 12 * S.dpr, r.w - 2 * pad, 12 * S.dpr);
+                    c.fillStyle = "#6fe8ff";
+                    c.fillRect(r.x + pad, r.y + r.h - pad - 12 * S.dpr, meterW, 12 * S.dpr);
+                    c.restore();
+                }
+
+                // ---------- Interaction ----------
+                let drag = null; // {key, min, max}
+                function hit(x, y) {
+                    // priority: buttons > sliders
+                    for (const k in S.rects) {
+                        const r = S.rects[k];
+                        if (!r || typeof r.x !== "number") continue;
+                        if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return { k, r };
+                    }
+                    return null;
+                }
+                function sliderSpec(k) {
+                    switch (k) {
+                        case "freq":
+                            return {
+                                min: 20,
+                                max: 2000,
+                                get: () => S.state.freq,
+                                set: (v) => (S.state.freq = v),
+                            };
+                        case "gain":
+                            return {
+                                min: -40,
+                                max: 0,
+                                get: () => S.state.gainDb,
+                                set: (v) => (S.state.gainDb = v),
+                            };
+                        case "lpf":
+                            return {
+                                min: 200,
+                                max: 12000,
+                                get: () => S.state.lpf,
+                                set: (v) => (S.state.lpf = v),
+                            };
+                        case "modRate":
+                            return {
+                                min: 0.1,
+                                max: 50,
+                                get: () => S.state.modRate,
+                                set: (v) => (S.state.modRate = v),
+                                cond: () => S.state.mode === "AM" || S.state.mode === "FM" || S.state.mode === "Chirp",
+                            };
+                        case "modDepth":
+                            return {
+                                min: 0,
+                                max: 1,
+                                get: () => S.state.modDepth,
+                                set: (v) => (S.state.modDepth = v),
+                                cond: () => S.state.mode === "AM" || S.state.mode === "FM",
+                            };
+                        case "chirpTo":
+                            return {
+                                min: 20,
+                                max: 4000,
+                                get: () => S.state.chirpTo,
+                                set: (v) => (S.state.chirpTo = v),
+                                cond: () => S.state.mode === "Chirp",
+                            };
+                        case "chirpSec":
+                            return {
+                                min: 0.05,
+                                max: 10,
+                                get: () => S.state.chirpSec,
+                                set: (v) => (S.state.chirpSec = v),
+                                cond: () => S.state.mode === "Chirp",
+                            };
+                        default:
+                            return null;
+                    }
+                }
+                function clamp(v, min, max) {
+                    return Math.min(max, Math.max(min, v));
+                }
+
+                function mpos(e) {
+                    const rect = cvs.getBoundingClientRect();
+                    const dpr = S.dpr;
+                    return {
+                        x: (e.clientX - rect.left) * dpr,
+                        y: (e.clientY - rect.top) * dpr,
+                    };
+                }
+
+                cvs.addEventListener("mousedown", (e) => {
+                    const { x, y } = mpos(e);
+                    const h = hit(x, y);
+                    if (!h) return;
+                    if (h.k.startsWith("mode_")) {
+                        const m = h.k.slice(5);
+                        S.state.mode = m;
+                        if (S.state.running) startCurrent();
+                        return;
+                    }
+                    if (h.k === "play") {
+                        S.state.running = !S.state.running;
+                        if (S.state.running) startCurrent();
+                        else stopAll();
+                        return;
+                    }
+                    if (h.k === "vibrate") {
+                        if (navigator.vibrate) navigator.vibrate([60, 30, 60, 200, 60]);
+                        return;
+                    }
+                    if (h.k.startsWith("noiseSeg_")) {
+                        const idx = Number(h.k.split("_")[1]);
+                        S.state.noiseKind = ["white", "pink", "brown"][idx];
+                        if (S.state.running && S.state.mode === "Noise") startCurrent();
+                        return;
+                    }
+                    // Slider?
+                    const spec = sliderSpec(h.k);
+                    if (spec && (spec.cond?.() ?? true)) {
+                        drag = { key: h.k, r: h.r, ...spec };
+                        // set immediately
+                        const pct = clamp((x - h.r.x) / h.r.w, 0, 1);
+                        spec.set(spec.min + (spec.max - spec.min) * pct);
+                        if (AC) applyGlobals();
+                        if (S.state.running && (h.k === "freq" || h.k === "lpf" || h.k === "gain")) applyGlobals();
+                    }
+                });
+                cvs.addEventListener("mousemove", (e) => {
+                    if (!drag) return;
+                    const { x } = mpos(e);
+                    const pct = clamp((x - drag.r.x) / drag.r.w, 0, 1);
+                    const val = drag.min + (drag.max - drag.min) * pct;
+                    drag.set(val);
+                    if (drag.key === "gain" || drag.key === "lpf") applyGlobals();
+                });
+                function endDrag() {
+                    if (!drag) return;
+                    // if the change affects the generator, restart when running
+                    const k = drag.key;
+                    if (S.state.running && ["freq", "modRate", "modDepth", "chirpTo", "chirpSec"].includes(k)) {
+                        startCurrent();
+                    }
+                    drag = null;
+                }
+                window.addEventListener("mouseup", endDrag);
+                window.addEventListener("mouseleave", endDrag);
+
+                // First paint
+                resize();
+
+                // Auto pause on page hide
+                window.addEventListener("pagehide", () => {
+                    stopAll();
+                    S.state.running = false;
+                });
+
+                // Scope animation loop is tied to draw() via rAF.
+            })();
+        </script>
+    </body>
+</html>
