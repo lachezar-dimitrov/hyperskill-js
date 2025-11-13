@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Ant Architectures – The Secret Life of Ant Colonies</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Modern-ish font, still classic single-file layout -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --bg: #050816;
+        --bg-soft: #0b1020;
+        --bg-softer: #11172a;
+        --border-soft: rgba(255, 255, 255, 0.08);
+        --accent: #ffb647;
+        --accent-soft: rgba(255, 182, 71, 0.18);
+        --accent-strong: #ff914d;
+        --text-main: #f5f7ff;
+        --text-muted: #a8afc8;
+        --chip-bg: rgba(255, 255, 255, 0.06);
+        --shadow-soft: 0 20px 40px rgba(0, 0, 0, 0.55);
+        --radius-lg: 22px;
+        --radius-md: 14px;
+        --radius-sm: 9px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 24px 10px 60px;
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        color: var(--text-main);
+        background: radial-gradient(circle at 0% 0%, #1b1940 0, transparent 50%),
+          radial-gradient(circle at 100% 0%, #2a163d 0, transparent 50%),
+          radial-gradient(circle at 0% 100%, #102c3b 0, transparent 55%),
+          radial-gradient(circle at 100% 100%, #1e253a 0, transparent 55%),
+          linear-gradient(145deg, #02030a 0, #050816 40%, #050816 100%);
+        min-height: 100vh;
+      }
+
+      /* Top-level layout table */
+      table.page {
+        width: min(1200px, 100%);
+        margin: 0 auto;
+        border-collapse: separate;
+        border-spacing: 0;
+        background: rgba(5, 8, 22, 0.96);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-soft);
+        overflow: hidden;
+      }
+
+      .page td {
+        vertical-align: top;
+      }
+
+      /* Header row */
+      .page-header {
+        background: radial-gradient(
+            circle at 10% 0,
+            rgba(255, 255, 255, 0.12),
+            transparent 55%
+          ),
+          linear-gradient(135deg, #060921 0%, #050816 40%, #060921 100%);
+        border-bottom: 1px solid var(--border-soft);
+      }
+
+      .page-header-inner {
+        padding: 20px 26px 18px;
+      }
+
+      .logo-title {
+        font-size: 1.7rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 800;
+        display: inline-block;
+      }
+
+      .logo-dot {
+        color: var(--accent-strong);
+      }
+
+      .tagline {
+        margin-top: 6px;
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        max-width: 520px;
+      }
+
+      .nav-row {
+        padding-top: 12px;
+      }
+
+      .nav-table {
+        border-collapse: separate;
+        border-spacing: 0;
+      }
+
+      .nav-table td {
+        padding: 0;
+      }
+
+      .nav-link {
+        display: inline-block;
+        padding: 6px 14px;
+        margin-right: 8px;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        border-radius: 999px;
+        background: var(--chip-bg);
+        border: 1px solid transparent;
+        color: var(--text-muted);
+        text-decoration: none;
+        transition: all 0.18s ease-out;
+        backdrop-filter: blur(18px);
+      }
+
+      .nav-link:hover {
+        border-color: var(--accent-soft);
+        color: var(--accent);
+        background: rgba(255, 255, 255, 0.04);
+        transform: translateY(-1px);
+      }
+
+      .nav-link--primary {
+        background: linear-gradient(135deg, var(--accent-strong), #ffb647);
+        color: #130b02;
+        font-weight: 600;
+        box-shadow: 0 8px 22px rgba(255, 182, 71, 0.4);
+      }
+
+      .nav-link--primary:hover {
+        transform: translateY(-1px) scale(1.02);
+        box-shadow: 0 10px 26px rgba(255, 182, 71, 0.55);
+      }
+
+      /* Content row: sidebar + main */
+      .content-row td {
+        padding: 0;
+      }
+
+      .sidebar {
+        width: 270px;
+        border-right: 1px solid var(--border-soft);
+        background: linear-gradient(
+          180deg,
+          rgba(13, 16, 40, 0.96),
+          rgba(6, 10, 30, 1)
+        );
+      }
+
+      .sidebar-inner {
+        padding: 18px 18px 24px;
+      }
+
+      .sidebar-title {
+        font-size: 0.95rem;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        color: var(--text-muted);
+        margin-bottom: 10px;
+      }
+
+      .sidebar-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+      }
+
+      .sidebar-section-heading {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        color: var(--text-muted);
+        padding: 10px 10px 6px;
+      }
+
+      .sidebar-link {
+        display: block;
+        padding: 7px 10px;
+        margin-bottom: 4px;
+        border-radius: var(--radius-sm);
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--text-main);
+        font-size: 0.9rem;
+        text-decoration: none;
+        transition: all 0.18s ease-out;
+      }
+
+      .sidebar-link span {
+        color: var(--text-muted);
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        margin-right: 6px;
+      }
+
+      .sidebar-link:hover {
+        background: rgba(255, 255, 255, 0.03);
+        border-color: var(--accent-soft);
+        transform: translateX(1px);
+      }
+
+      .sidebar-chip-row td {
+        padding-top: 10px;
+      }
+
+      .chip-table {
+        border-collapse: separate;
+        border-spacing: 0 4px;
+        font-size: 0.78rem;
+        color: var(--text-muted);
+      }
+
+      .chip-table td {
+        padding: 4px 8px;
+        background: var(--chip-bg);
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        white-space: nowrap;
+      }
+
+      .sidebar-stat-card {
+        margin-top: 18px;
+        border-radius: var(--radius-md);
+        background: radial-gradient(
+            circle at 0% 0%,
+            rgba(255, 255, 255, 0.08),
+            transparent 60%
+          ),
+          rgba(6, 11, 33, 0.98);
+        border: 1px solid var(--border-soft);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+        padding: 12px 13px 12px;
+        font-size: 0.8rem;
+      }
+
+      .stat-row {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 6px;
+        color: var(--text-muted);
+      }
+
+      .stat-row strong {
+        color: var(--accent);
+        font-size: 0.85rem;
+      }
+
+      .stat-label {
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+
+      /* Main column */
+      .main {
+        background: radial-gradient(
+            circle at 100% 0,
+            rgba(255, 255, 255, 0.06),
+            transparent 60%
+          ),
+          radial-gradient(
+            circle at 0 100%,
+            rgba(255, 255, 255, 0.06),
+            transparent 60%
+          ),
+          var(--bg-soft);
+      }
+
+      .main-inner {
+        padding: 22px 24px 26px;
+      }
+
+      .hero-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        margin-bottom: 22px;
+      }
+
+      .hero-card {
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-soft);
+        background: radial-gradient(
+            circle at 0 0,
+            rgba(255, 255, 255, 0.12),
+            transparent 55%
+          ),
+          linear-gradient(145deg, #090f2a, #06091f);
+        padding: 18px 18px 16px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .hero-kicker {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.22em;
+        color: var(--accent);
+        margin-bottom: 5px;
+      }
+
+      .hero-title {
+        font-size: 1.9rem;
+        margin: 0 0 10px;
+        line-height: 1.25;
+      }
+
+      .hero-sub {
+        color: var(--text-muted);
+        font-size: 0.98rem;
+        max-width: 540px;
+      }
+
+      .hero-meta-row {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        font-size: 0.78rem;
+        color: var(--text-muted);
+      }
+
+      .hero-pill {
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .hero-image-cell {
+        width: 42%;
+        padding-left: 18px;
+      }
+
+      .hero-image-wrapper {
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: #020308;
+        box-shadow: 0 18px 32px rgba(0, 0, 0, 0.6);
+      }
+
+      .hero-image-wrapper img {
+        display: block;
+        width: 100%;
+        height: auto;
+        object-fit: cover;
+        transform: scale(1.03);
+        transition: transform 0.25s ease-out, filter 0.25s ease-out;
+        filter: saturate(1.2) contrast(1.05);
+      }
+
+      .hero-image-wrapper:hover img {
+        transform: scale(1.06);
+        filter: saturate(1.25) contrast(1.08);
+      }
+
+      /* Section cards (still table-based) */
+      .section-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        margin-bottom: 18px;
+      }
+
+      .section-card {
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-soft);
+        background: var(--bg-softer);
+        overflow: hidden;
+      }
+
+      .section-header-row {
+        background: linear-gradient(
+          90deg,
+          rgba(255, 182, 71, 0.14),
+          transparent
+        );
+        border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      }
+
+      .section-header {
+        padding: 10px 14px 8px;
+      }
+
+      .section-kicker {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        color: var(--accent);
+        margin-bottom: 4px;
+      }
+
+      .section-title {
+        margin: 0;
+        font-size: 1.2rem;
+      }
+
+      .section-body-row td {
+        padding: 14px;
+      }
+
+      .section-grid-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+      }
+
+      .section-grid-table td {
+        vertical-align: top;
+        padding: 6px 10px 4px 0;
+        font-size: 0.93rem;
+        line-height: 1.6;
+        color: var(--text-main);
+      }
+
+      .section-grid-table td:last-child {
+        padding-right: 0;
+      }
+
+      .section-h3 {
+        font-size: 0.95rem;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        margin-bottom: 6px;
+        color: var(--text-muted);
+      }
+
+      .section-note {
+        margin-top: 8px;
+        font-size: 0.82rem;
+        color: var(--text-muted);
+      }
+
+      .bullet-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0 4px;
+        font-size: 0.9rem;
+      }
+
+      .bullet-table td {
+        padding: 2px 0;
+        color: var(--text-main);
+      }
+
+      .bullet-dot {
+        width: 16px;
+        color: var(--accent);
+        font-weight: 600;
+      }
+
+      /* Image cards in sections */
+      .image-card {
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: #020308;
+        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.6);
+        margin-bottom: 6px;
+      }
+
+      .image-card img {
+        width: 100%;
+        display: block;
+        height: auto;
+      }
+
+      .image-caption {
+        font-size: 0.78rem;
+        padding: 6px 8px 7px;
+        color: var(--text-muted);
+        background: rgba(0, 0, 0, 0.7);
+      }
+
+      /* Footer */
+      .footer-row td {
+        padding: 10px 22px 16px;
+        border-top: 1px solid var(--border-soft);
+        background: #050818;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+      }
+
+      .footer-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .footer-meta span {
+        opacity: 0.85;
+      }
+
+      .footer-meta a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      .footer-meta a:hover {
+        text-decoration: underline;
+      }
+
+      /* Back to top button */
+      #backToTop {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        padding: 9px 13px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.45);
+        background: rgba(5, 8, 22, 0.9);
+        color: var(--text-main);
+        font-size: 0.8rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+        z-index: 50;
+      }
+
+      #backToTop.visible {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
+      }
+
+      #backToTop span {
+        font-size: 1rem;
+        line-height: 1;
+      }
+
+      @media (max-width: 920px) {
+        .sidebar {
+          display: none;
+        }
+
+        .page-header-inner {
+          padding: 16px 16px 12px;
+        }
+
+        .main-inner {
+          padding: 18px 16px 22px;
+        }
+
+        .hero-image-cell {
+          display: none;
+        }
+      }
+
+      @media (max-width: 600px) {
+        body {
+          padding: 10px 6px 44px;
+        }
+
+        .logo-title {
+          font-size: 1.4rem;
+        }
+
+        .hero-title {
+          font-size: 1.6rem;
+        }
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+    </style>
+  </head>
+  <body>
+    <table class="page">
+      <!-- HEADER -->
+      <tr class="page-header">
+        <td colspan="2">
+          <table width="100%" class="page-header-inner">
+            <tr>
+              <td>
+                <div class="logo-title">
+                  ANT<span class="logo-dot">.</span>ARCHITECTS
+                </div>
+                <div class="tagline">
+                  A table-laid exploration of ant biology, from the
+                  micro-anatomy of a single worker to the macro-behaviour of a
+                  colony acting as one distributed brain.
+                </div>
+              </td>
+              <td align="right">
+                <table class="nav-table">
+                  <tr>
+                    <td>
+                      <a href="#overview" class="nav-link nav-link--primary"
+                        >Overview</a
+                      >
+                      <a href="#anatomy" class="nav-link">Anatomy</a>
+                      <a href="#castes" class="nav-link">Castes</a>
+                      <a href="#trail" class="nav-link">Pheromones</a>
+                      <a href="#life-cycle" class="nav-link">Life&nbsp;Cycle</a>
+                      <a href="#credits" class="nav-link">Image&nbsp;Credits</a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <!-- CONTENT -->
+      <tr class="content-row">
+        <!-- SIDEBAR -->
+        <td class="sidebar">
+          <table class="sidebar-inner">
+            <tr>
+              <td>
+                <div class="sidebar-title">Colony Map</div>
+                <table class="sidebar-table">
+                  <tr>
+                    <td class="sidebar-section-heading">Navigate</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <a href="#overview" class="sidebar-link">
+                        <span>01</span>Superorganism overview
+                      </a>
+                      <a href="#anatomy" class="sidebar-link">
+                        <span>02</span>Worker anatomy
+                      </a>
+                      <a href="#castes" class="sidebar-link">
+                        <span>03</span>Caste system
+                      </a>
+                      <a href="#trail" class="sidebar-link">
+                        <span>04</span>Pheromone networks
+                      </a>
+                      <a href="#life-cycle" class="sidebar-link">
+                        <span>05</span>Life-cycle of a colony
+                      </a>
+                    </td>
+                  </tr>
+                  <tr class="sidebar-chip-row">
+                    <td>
+                      <table class="chip-table">
+                        <tr>
+                          <td>Superorganism</td>
+                          <td>Swarm Intelligence</td>
+                          <td>Division of Labour</td>
+                        </tr>
+                        <tr>
+                          <td>Formicidae</td>
+                          <td>Trail Algorithms</td>
+                          <td>Metapleural Glands</td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+
+                <div class="sidebar-stat-card">
+                  <div class="stat-label">Rule of the colony</div>
+                  <div class="stat-row">
+                    <span>Workers</span>
+                    <strong>≥ 100,000</strong>
+                  </div>
+                  <div class="stat-row">
+                    <span>Eggs per queen / day</span>
+                    <strong>Up to 1,000+</strong>
+                  </div>
+                  <div class="stat-row">
+                    <span>Colony lifetime</span>
+                    <strong>10–30 years</strong>
+                  </div>
+                  <div class="section-note" style="margin-top: 8px">
+                    An ant colony is closer to a distributed organism than a
+                    crowd of individuals: each worker is a specialised cell;
+                    trails and pheromones form the nervous system; the queen
+                    operates as a slowly-firing ovary.
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+
+        <!-- MAIN -->
+        <td class="main">
+          <div class="main-inner">
+            <!-- HERO -->
+            <table class="hero-table">
+              <tr>
+                <td>
+                  <div class="hero-card">
+                    <div class="hero-kicker">Biological Life of Ants</div>
+                    <h1 class="hero-title">
+                      Inside the Engine Room of an Ant Superorganism
+                    </h1>
+                    <p class="hero-sub">
+                      Ants compress architectural engineering, logistics,
+                      warfare, farming and chemical communication into bodies a
+                      few millimetres long. This table-driven “old-school” page
+                      walks through their inner life: how anatomy, castes,
+                      pheromones and life cycles interlock into a single living
+                      system.
+                    </p>
+                    <div class="hero-meta-row">
+                      <div class="hero-pill">💠 Family: Formicidae</div>
+                      <div class="hero-pill">🧠 Swarm-level intelligence</div>
+                      <div class="hero-pill">
+                        🌍 Present on almost every continent
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td class="hero-image-cell">
+                  <div class="hero-image-wrapper">
+                    <img
+                      src="https://upload.wikimedia.org/wikipedia/commons/c/c5/Ant_closeup.jpg"
+                      alt="Close-up photograph of a reddish ant on a blue crystalline surface."
+                    />
+                  </div>
+                </td>
+              </tr>
+            </table>
+
+            <!-- OVERVIEW -->
+            <table class="section-table" id="overview">
+              <tr>
+                <td>
+                  <div class="section-card">
+                    <table width="100%">
+                      <tr class="section-header-row">
+                        <td class="section-header">
+                          <div class="section-kicker">
+                            01 · Colony as a system
+                          </div>
+                          <h2 class="section-title">
+                            From individuals to a self-organising city
+                          </h2>
+                        </td>
+                      </tr>
+                      <tr class="section-body-row">
+                        <td>
+                          <table class="section-grid-table">
+                            <tr>
+                              <td>
+                                <div class="section-h3">
+                                  Superorganism logic
+                                </div>
+                                <p>
+                                  A single ant is almost helpless: limited
+                                  memory, simple rules, no overview of the nest.
+                                  A colony, however, behaves like a single
+                                  emergent organism. Local rules –
+                                  <em
+                                    >follow the trail, groom the queen, carry
+                                    the brood towards the right humidity</em
+                                  >
+                                  – scale into globally efficient behaviour:
+                                  coordinated foraging, nest ventilation and
+                                  defence.
+                                </p>
+                                <p>
+                                  The colony continuously processes information
+                                  from three main streams:
+                                </p>
+                                <table class="bullet-table">
+                                  <tr>
+                                    <td class="bullet-dot">◆</td>
+                                    <td>
+                                      <strong>Chemical:</strong> pheromones and
+                                      cuticular odours encode identity, status
+                                      and urgency.
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td class="bullet-dot">◆</td>
+                                    <td>
+                                      <strong>Mechanical:</strong> antennal
+                                      taps, trophallaxis (mouth-to-mouth food
+                                      exchange) and vibrations convey local
+                                      context.
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td class="bullet-dot">◆</td>
+                                    <td>
+                                      <strong>Environmental:</strong>
+                                      temperature, humidity and light gradients
+                                      guide where brood, workers and fungus
+                                      gardens are placed.
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                              <td>
+                                <div class="section-h3">
+                                  Colony scale in numbers
+                                </div>
+                                <p>
+                                  Depending on the species, colonies range from
+                                  a few dozen ants in a twig to millions of
+                                  workers occupying networks of underground
+                                  chambers. Fire ant “supercolonies” can span
+                                  hundreds of metres with dense trail networks
+                                  mapping food sources in real time.
+                                </p>
+
+                                <div class="image-card">
+                                  <img
+                                    src="https://upload.wikimedia.org/wikipedia/commons/d/d1/A_Texas_Ant_Colony.jpg"
+                                    alt="Dense cluster of reddish fire ants moving among rocks in a Texas colony."
+                                  />
+                                  <div class="image-caption">
+                                    Fire ant colony from Texas – a high-density,
+                                    fast-moving logistics engine built entirely
+                                    from bodies.
+                                  </div>
+                                </div>
+
+                                <p class="section-note">
+                                  At this scale, the colony’s “intelligence” is
+                                  not stored in any central brain but in the
+                                  dynamic distribution of workers, pheromone
+                                  fields and brood across space.
+                                </p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </div>
+                </td>
+              </tr>
+            </table>
+
+            <!-- ANATOMY -->
+            <table class="section-table" id="anatomy">
+              <tr>
+                <td>
+                  <div class="section-card">
+                    <table width="100%">
+                      <tr class="section-header-row">
+                        <td class="section-header">
+                          <div class="section-kicker">
+                            02 · Worker morphology
+                          </div>
+                          <h2 class="section-title">
+                            The three-segment design that runs the colony
+                          </h2>
+                        </td>
+                      </tr>
+                      <tr class="section-body-row">
+                        <td>
+                          <table class="section-grid-table">
+                            <tr>
+                              <td style="width: 55%">
+                                <div class="section-h3">
+                                  Head: sensors &amp; tools
+                                </div>
+                                <p>
+                                  The head packs compound eyes, segmented
+                                  antennae and powerful mandibles. Antennae are
+                                  <em>geniculate</em> (elbowed), giving
+                                  fine-grained sampling of chemical landscapes.
+                                  Mandibles cut, carry, sculpt soil and fight;
+                                  in some species, specialised “soldiers” wield
+                                  oversized, trap-like jaws.
+                                </p>
+
+                                <div class="section-h3">
+                                  Mesosoma: power unit
+                                </div>
+                                <p>
+                                  Behind the head lies the
+                                  <strong>mesosoma</strong> – essentially the
+                                  fused thorax and first abdominal segment. It
+                                  anchors the legs and, in queens and males, the
+                                  flight muscles for nuptial swarms. Compared to
+                                  many insects, worker ants have an enlarged
+                                  mesosoma relative to body size, maximising
+                                  mechanical power per gram.
+                                </p>
+
+                                <div class="section-h3">
+                                  Metasoma &amp; petiole
+                                </div>
+                                <p>
+                                  The signature “ant waist” is formed by one or
+                                  two narrow nodes at the front of the abdomen
+                                  (the <strong>petiole</strong>). This flexible
+                                  hinge allows the rear section – the
+                                  <em>gaster</em> – to curl beneath the body for
+                                  stinging, spraying acid, or handing food to
+                                  nest-mates.
+                                </p>
+                              </td>
+                              <td>
+                                <div class="image-card">
+                                  <img
+                                    src="https://upload.wikimedia.org/wikipedia/commons/8/8d/Scheme_ant_worker_anatomy-en.svg"
+                                    alt="Diagram of a worker ant showing labelled body segments and structures."
+                                  />
+                                  <div class="image-caption">
+                                    Classical worker anatomy: head, mesosoma,
+                                    petiole and gaster form a minimalist yet
+                                    highly specialised chassis.
+                                  </div>
+                                </div>
+                                <p>
+                                  A crucial but invisible feature is the
+                                  <strong>metapleural gland</strong>, unique to
+                                  ants, which secretes antimicrobial compounds.
+                                  This biochemical “firewall” helps protect
+                                  dense colonies from runaway infections.
+                                </p>
+                                <p class="section-note">
+                                  The entire body plan is tuned for
+                                  contact-based sensing and close-quarters
+                                  interaction – ideal for life in narrow
+                                  tunnels, not for independent roaming.
+                                </p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </div>
+                </td>
+              </tr>
+            </table>
+
+            <!-- CASTE SYSTEM -->
+            <table class="section-table" id="castes">
+              <tr>
+                <td>
+                  <div class="section-card">
+                    <table width="100%">
+                      <tr class="section-header-row">
+                        <td class="section-header">
+                          <div class="section-kicker">
+                            03 · Division of labour
+                          </div>
+                          <h2 class="section-title">
+                            Queens, workers and the choreography of roles
+                          </h2>
+                        </td>
+                      </tr>
+                      <tr class="section-body-row">
+                        <td>
+                          <table class="section-grid-table">
+                            <tr>
+                              <td>
+                                <div class="section-h3">
+                                  Queen: the long-lived ovary
+                                </div>
+                                <p>
+                                  Queens develop from larvae fed on richer diets
+                                  and exposed to different hormonal
+                                  environments. After a nuptial flight – often a
+                                  dramatic mass event after rain – a fertilised
+                                  queen sheds her wings, digs a founding chamber
+                                  and raises the first cohort of workers alone.
+                                </p>
+
+                                <div class="image-card">
+                                  <img
+                                    src="https://upload.wikimedia.org/wikipedia/commons/0/0f/..._ant_--_queen_weaver_ant_%286185121219%29.jpg"
+                                    alt="Green queen weaver ant walking on a leaf."
+                                  />
+                                  <div class="image-caption">
+                                    Queen weaver ant with swollen gaster full of
+                                    developing eggs. Her job is narrow but
+                                    relentless: reproduction.
+                                  </div>
+                                </div>
+
+                                <p>
+                                  Remarkably, some queens can live for decades,
+                                  outlasting thousands of generations of their
+                                  own workers. A single queen may lay millions
+                                  of eggs over her lifetime.
+                                </p>
+                              </td>
+                              <td>
+                                <div class="section-h3">
+                                  Workers: modular specialists
+                                </div>
+                                <p>
+                                  Workers are typically sterile females. In many
+                                  species they are morphologically identical and
+                                  switch tasks with age or colony needs: nursing
+                                  brood when young, nest work in mid-life,
+                                  foraging and defence later. In others, workers
+                                  split into subcastes:
+                                  <em>minor</em> workers for fine tasks and
+                                  <em>major</em> workers – sometimes “soldiers”
+                                  – for defence and heavy labour.
+                                </p>
+
+                                <div class="section-h3">
+                                  Males: disposable genetics
+                                </div>
+                                <p>
+                                  Males are short-lived, often winged, and exist
+                                  almost solely to fertilise queens during
+                                  nuptial flights. Once mating is done, they die
+                                  quickly; for the colony, maintaining them
+                                  outside mating windows is wasted energy.
+                                </p>
+
+                                <table
+                                  class="bullet-table"
+                                  style="margin-top: 8px"
+                                >
+                                  <tr>
+                                    <td class="bullet-dot">➤</td>
+                                    <td>
+                                      <strong>Efficiency rule:</strong>
+                                      individuals are cheap; information and
+                                      brood are precious.
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td class="bullet-dot">➤</td>
+                                    <td>
+                                      <strong>Outcome:</strong> castes evolve to
+                                      optimise colony-level survival, not
+                                      individual comfort.
+                                    </td>
+                                  </tr>
+                                </table>
+
+                                <p class="section-note">
+                                  The caste system is plastic: nutrition,
+                                  pheromones and temperature during larval
+                                  development can bias which roles emerge,
+                                  letting the colony tune its “org chart” to
+                                  current conditions.
+                                </p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </div>
+                </td>
+              </tr>
+            </table>
+
+            <!-- PHEROMONE NETWORKS -->
+            <table class="section-table" id="trail">
+              <tr>
+                <td>
+                  <div class="section-card">
+                    <table width="100%">
+                      <tr class="section-header-row">
+                        <td class="section-header">
+                          <div class="section-kicker">
+                            04 · Chemical routing
+                          </div>
+                          <h2 class="section-title">
+                            Pheromone trails as a living network protocol
+                          </h2>
+                        </td>
+                      </tr>
+                      <tr class="section-body-row">
+                        <td>
+                          <table class="section-grid-table">
+                            <tr>
+                              <td style="width: 58%">
+                                <div class="section-h3">
+                                  How a trail is written
+                                </div>
+                                <p>
+                                  When a foraging worker finds food, she returns
+                                  to the nest laying a thin pheromone line from
+                                  a specialised gland. Other workers follow this
+                                  gradient, reinforcing it if the food is
+                                  valuable. The result: a self-optimising path
+                                  where high-yield routes accumulate more
+                                  chemical “weight” and low-yield paths fade.
+                                </p>
+                                <p>
+                                  This dynamic is mathematically similar to
+                                  shortest-path algorithms used in networks:
+                                  paths with the best reward-to-cost ratio are
+                                  amplified, while noisy or unproductive
+                                  branches decay.
+                                </p>
+
+                                <div class="section-h3">Beyond food</div>
+                                <p>
+                                  Ants use different pheromones to mark alarm,
+                                  territory, nest entrances and even corpse
+                                  disposal sites. A single worker can overlay
+                                  multiple messages in space and time, with
+                                  different chemicals decaying at different
+                                  rates – a temporal database written directly
+                                  onto the terrain.
+                                </p>
+                              </td>
+                              <td>
+                                <div class="image-card">
+                                  <img
+                                    src="https://upload.wikimedia.org/wikipedia/commons/d/d1/A_Texas_Ant_Colony.jpg"
+                                    alt="Fire ants moving along irregular paths around stones."
+                                  />
+                                  <div class="image-caption">
+                                    To the human eye this looks chaotic;
+                                    chemically, it is a weighted routing graph
+                                    converging on profitable resources.
+                                  </div>
+                                </div>
+
+                                <p>
+                                  Inside the nest, odour signatures also encode
+                                  colony identity. Workers rapidly reject
+                                  intruders whose cuticular hydrocarbons do not
+                                  match the local template, maintaining tight
+                                  security at tunnel entrances.
+                                </p>
+
+                                <p class="section-note">
+                                  For computer science, ant trails inspired
+                                  <em>ant colony optimisation</em> algorithms,
+                                  which solve complex routing and scheduling
+                                  problems by simulating virtual pheromones.
+                                </p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </div>
+                </td>
+              </tr>
+            </table>
+
+            <!-- LIFE CYCLE -->
+            <table class="section-table" id="life-cycle">
+              <tr>
+                <td>
+                  <div class="section-card">
+                    <table width="100%">
+                      <tr class="section-header-row">
+                        <td class="section-header">
+                          <div class="section-kicker">05 · Time evolution</div>
+                          <h2 class="section-title">
+                            From nuptial flight to mature megacity
+                          </h2>
+                        </td>
+                      </tr>
+                      <tr class="section-body-row">
+                        <td>
+                          <table class="section-grid-table">
+                            <tr>
+                              <td style="width: 54%">
+                                <div class="section-h3">1. Founding</div>
+                                <p>
+                                  A fertilised queen lands after a nuptial
+                                  flight, sheds her wings and buries herself.
+                                  She metabolises her flight muscles as an
+                                  emergency energy reserve, laying the first
+                                  eggs and raising them alone. If she survives
+                                  predators, desiccation and starvation, the
+                                  first workers take over outside tasks and the
+                                  colony exits “start-up” mode.
+                                </p>
+
+                                <div class="section-h3">2. Expansion</div>
+                                <p>
+                                  With hundreds of workers, the colony shifts
+                                  into aggressive growth: deepening tunnels,
+                                  opening satellite chambers, and increasing
+                                  foraging radius. Brood is sorted by age and
+                                  temperature needs, creating distinct “nursery”
+                                  zones. Task specialisation increases
+                                  throughput; traffic on trails becomes denser
+                                  and more stable.
+                                </p>
+
+                                <div class="section-h3">3. Maturity</div>
+                                <p>
+                                  At maturity, the colony starts producing males
+                                  and new queens. This is expensive, so it
+                                  typically only happens once food and nest
+                                  security are high. In multi-queen species,
+                                  daughter queens may stay, creating sprawling
+                                  polygynous colonies; in others they depart to
+                                  found independent nests.
+                                </p>
+                              </td>
+                              <td>
+                                <div class="section-h3">
+                                  Life stages of an individual ant
+                                </div>
+                                <table class="bullet-table">
+                                  <tr>
+                                    <td class="bullet-dot">1.</td>
+                                    <td>
+                                      <strong>Egg:</strong> tiny, white and
+                                      immobile; stage mostly about protection
+                                      and temperature control.
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td class="bullet-dot">2.</td>
+                                    <td>
+                                      <strong>Larva:</strong> soft, grub-like;
+                                      consumes food delivered by workers or
+                                      regurgitated by nurse ants. Nutritional
+                                      regime here heavily influences future
+                                      caste.
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td class="bullet-dot">3.</td>
+                                    <td>
+                                      <strong>Pupa:</strong> tissues reorganise;
+                                      wings and muscles form in queens and
+                                      males. In some species pupae are wrapped
+                                      in a silk cocoon.
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td class="bullet-dot">4.</td>
+                                    <td>
+                                      <strong>Adult:</strong> emerges and
+                                      rapidly transitions into its role, guided
+                                      by odour, age and colony needs.
+                                    </td>
+                                  </tr>
+                                </table>
+
+                                <p style="margin-top: 10px">
+                                  Throughout, workers constantly move brood
+                                  between chambers to keep them within narrow
+                                  humidity and temperature bands – a distributed
+                                  climate-control system with no thermostats,
+                                  only behaviour.
+                                </p>
+
+                                <p class="section-note">
+                                  Entire forest ecosystems lean on this life
+                                  cycle: ants aerate soil, recycle nutrients,
+                                  disperse seeds and act as both predators and
+                                  prey. A healthy colony is infrastructure for
+                                  the habitat around it.
+                                </p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </div>
+                </td>
+              </tr>
+            </table>
+
+            <!-- CREDITS -->
+            <table class="section-table" id="credits">
+              <tr>
+                <td>
+                  <div class="section-card">
+                    <table width="100%">
+                      <tr class="section-header-row">
+                        <td class="section-header">
+                          <div class="section-kicker">06 · Sources</div>
+                          <h2 class="section-title">
+                            Open images &amp; attribution
+                          </h2>
+                        </td>
+                      </tr>
+                      <tr class="section-body-row">
+                        <td>
+                          <p>
+                            All photographs and diagrams on this page are loaded
+                            directly from openly licensed images on Wikimedia
+                            Commons and related projects:
+                          </p>
+                          <table class="bullet-table">
+                            <tr>
+                              <td class="bullet-dot">•</td>
+                              <td>
+                                <strong>Ant close-up:</strong> “Ant closeup.jpg”
+                                by Steve Jurvetson, <em>CC BY 2.0</em>, via
+                                Wikimedia Commons.
+                              </td>
+                            </tr>
+                            <tr>
+                              <td class="bullet-dot">•</td>
+                              <td>
+                                <strong>Worker anatomy diagram:</strong> “Scheme
+                                ant worker anatomy-en.svg” by Mariana Ruiz
+                                (LadyofHats), released into the public domain.
+                              </td>
+                            </tr>
+                            <tr>
+                              <td class="bullet-dot">•</td>
+                              <td>
+                                <strong>Texas ant colony:</strong> “A Texas Ant
+                                Colony.jpg” by Wing-Chi Poon,
+                                <em>CC BY-SA 2.5</em>.
+                              </td>
+                            </tr>
+                            <tr>
+                              <td class="bullet-dot">•</td>
+                              <td>
+                                <strong>Queen weaver ant:</strong> “... ant –
+                                queen weaver ant (6185121219).jpg” by Dinesh
+                                Valke, <em>CC BY-SA 2.0</em>.
+                              </td>
+                            </tr>
+                          </table>
+                          <p class="section-note">
+                            Licensing and authorship details are preserved by
+                            loading the images directly from their original
+                            hosts. Text on this page is an original synthesis
+                            built around those open resources.
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </div>
+        </td>
+      </tr>
+
+      <!-- FOOTER -->
+      <tr class="footer-row">
+        <td colspan="2">
+          <div class="footer-meta">
+            <span>Ant Architectures – single-file, table-based layout.</span>
+            <span>Design: nested HTML tables with modern CSS only.</span>
+            <span
+              >Content focus: biological life and systems-level behaviour of
+              ants.</span
+            >
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <button id="backToTop" type="button"><span>↑</span> Top</button>
+
+    <script>
+      (function () {
+        var btn = document.getElementById("backToTop");
+        if (!btn) return;
+
+        window.addEventListener("scroll", function () {
+          if (window.scrollY > 260) {
+            btn.classList.add("visible");
+          } else {
+            btn.classList.remove("visible");
+          }
+        });
+
+        btn.addEventListener("click", function () {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+      })();
+    </script>
+  </body>
+</html>
