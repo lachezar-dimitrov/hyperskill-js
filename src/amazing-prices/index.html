@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pricing — Amazing Product</title>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --ink: #0a0a0a;
+        --muted: #61666b;
+        --border: #d9dce1;
+        --card-bg: #fff;
+        --primary: #1a73e8;
+        --primary-ink: #ffffff;
+        --radius: 10px;
+        --shadow: 0 6px 18px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        font: 16px/1.55 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu,
+          Cantarell, Noto Sans, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        color: var(--ink);
+        background: var(--bg);
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem 2rem;
+        border-bottom: 1px solid var(--border);
+      }
+      #nav-brand {
+        color: var(--ink);
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 1.2rem;
+      }
+      header nav a {
+        color: var(--ink);
+        text-decoration: none;
+        margin-left: 1.25rem;
+      }
+      header nav a:hover {
+        opacity: 0.8;
+      }
+
+      footer a {
+        color: var(--ink);
+        text-decoration: none;
+      }
+      footer a:hover {
+        opacity: 0.8;
+      }
+
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 2rem 1.25rem 4rem;
+      }
+
+      /* First section (title + paragraph) */
+      .pricing-intro {
+        text-align: center;
+        padding: 3rem 0 2rem;
+      }
+      .pricing-intro h1 {
+        margin: 0 0 0.75rem;
+        font-size: clamp(2.2rem, 2.8vw + 1.2rem, 3.25rem);
+        letter-spacing: 0.3px;
+      }
+      .pricing-intro p {
+        margin: 0 auto;
+        max-width: 720px;
+        color: var(--muted);
+      }
+
+      /* Second section (cards) – force stable left-to-right order */
+      .pricing-cards {
+        display: flex;
+        gap: 2rem;
+        justify-content: center;
+        flex-wrap: nowrap; /* no wrapping; keeps DOM order horizontally */
+        overflow-x: auto; /* scroll horizontally on narrow viewports */
+        padding: 1rem 0 3rem;
+        -webkit-overflow-scrolling: touch;
+      }
+      .card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 1.25rem 1.25rem 1.5rem;
+        text-align: center;
+        min-width: 280px; /* fixed min width so nowrap + order is stable */
+        max-width: 320px;
+        flex: 0 0 auto; /* prevent shrinking/reflow that could reorder */
+      }
+      .card h3 {
+        margin: 0.25rem 0 0;
+        font-size: 1.15rem;
+        font-weight: 700;
+      }
+      .card-header {
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 0.75rem;
+        margin-bottom: 1rem;
+      }
+      .price {
+        font-size: 1.75rem;
+        font-weight: 800;
+        margin: 0.5rem 0 1rem;
+      }
+      .features {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 1.25rem;
+        color: var(--muted);
+      }
+      .features li {
+        padding: 0.25rem 0;
+      }
+      .cta {
+        display: inline-block;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        background: var(--primary);
+        color: var(--primary-ink);
+        font-weight: 700;
+        text-decoration: none;
+        border: 1px solid rgba(0, 0, 0, 0.06);
+      }
+      .cta:hover {
+        filter: brightness(1.05);
+      }
+
+      /* emphasise the middle plan slightly */
+      .card.pro {
+        border-color: #b7cdfa;
+        box-shadow: 0 10px 26px rgba(26, 115, 232, 0.18), var(--shadow);
+      }
+
+      footer a {
+        color: var(--ink);
+        text-decoration: none;
+      }
+      footer a:hover {
+        text-decoration: underline;
+      }
+
+      /* ---------- SECTION 3: COMPARE PLANS TABLE ---------- */
+      .compare-plans {
+        padding: 1rem 0 2rem;
+      }
+
+      .compare-plans h2 {
+        text-align: center; /* required earlier tests */
+        margin-bottom: 1rem;
+      }
+
+      .compare-plans table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .compare-plans th,
+      .compare-plans td {
+        border: 1px solid #000; /* 1px solid required by tests */
+        padding: 0.5rem 0.75rem;
+        text-align: left;
+      }
+
+      /* ---------- RESPONSIVE FOR MOBILE (Stage 4) ---------- */
+      @media screen and (max-width: 720px) {
+        header {
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+          gap: 0.5rem;
+        }
+
+        header nav {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 0.75rem;
+        }
+
+        header nav a {
+          margin: 0;
+        }
+
+        main {
+          padding: 2rem 1rem 3rem;
+          max-width: 100%;
+        }
+
+        .pricing-cards {
+          flex-direction: column;
+          align-items: stretch;
+          overflow-x: visible;
+        }
+
+        .card {
+          max-width: none;
+          width: 100%;
+          min-width: 0;
+        }
+
+        .compare-plans table {
+          display: block;
+          overflow-x: auto;
+          white-space: nowrap;
+        }
+
+        footer {
+          flex-direction: column;
+          align-items: center;
+          gap: 0.5rem;
+          flex-wrap: nowrap;
+        }
+
+        footer a {
+          margin: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a id="nav-brand" href="#">Amazing Product</a>
+      <nav>
+        <a href="#">Features</a>
+        <a href="#">Enterprise</a>
+        <a href="#">Support</a>
+        <a href="#">Pricing</a>
+      </nav>
+    </header>
+
+    <main>
+      <!-- First Section: Title and Description -->
+      <section class="pricing-intro">
+        <h1>Amazing Prices</h1>
+        <p>
+          Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam pretium
+          justo non urna posuere, vitae placerat dui vestibulum. Pick the plan
+          that fits and scale without friction.
+        </p>
+      </section>
+
+      <!-- Second Section: Pricing Cards -->
+      <section class="pricing-cards">
+        <div class="card">
+          <div class="card-header">
+            <h4>Free</h4>
+          </div>
+          <div class="card-body">
+            <h3 class="price">$0<span style="font-weight: 600">/mo</span></h3>
+            <ul class="features">
+              <p>10 users included</p>
+              <p>2 GB of storage</p>
+              <p>Help centre access</p>
+              <p>Email support</p>
+            </ul>
+            <button class="cta" href="#">Sign up for free</button>
+          </div>
+        </div>
+
+        <div class="card pro">
+          <div class="card-header">
+            <h4>Pro</h4>
+          </div>
+          <div class="card-body">
+            <h3 class="price">$15<span style="font-weight: 600">/mo</span></h3>
+            <ul class="features">
+              <p>20 users included</p>
+              <p>10 GB of storage</p>
+              <p>Priority email support</p>
+              <p>Help centre access</p>
+            </ul>
+            <button class="cta" href="#">Get started</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h4>Premium</h4>
+          </div>
+          <div class="card-body">
+            <h3 class="price">$29<span style="font-weight: 600">/mo</span></h3>
+            <ul class="features">
+              <p>30 users included</p>
+              <p>15 GB of storage</p>
+              <p>Phone & email support</p>
+              <p>Help centre access</p>
+            </ul>
+            <button class="cta" href="#">Get started</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Third Section: Compare Plans -->
+      <section id="compare-plans">
+        <h2 style="text-align: center">Compare Plans</h2>
+
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px">
+          <thead>
+            <tr>
+              <th style="border: 1px solid #000; padding: 10px"></th>
+              <th style="border: 1px solid #000; padding: 10px">Free</th>
+              <th style="border: 1px solid #000; padding: 10px">Pro</th>
+              <th style="border: 1px solid #000; padding: 10px">Enterprise</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr>
+              <th style="border: 1px solid #000; padding: 10px">Public</th>
+              <td style="border: 1px solid #000; padding: 10px">X</td>
+              <td style="border: 1px solid #000; padding: 10px">X</td>
+              <td style="border: 1px solid #000; padding: 10px"></td>
+            </tr>
+            <tr>
+              <th style="border: 1px solid #000; padding: 10px">Private</th>
+              <td style="border: 1px solid #000; padding: 10px"></td>
+              <td style="border: 1px solid #000; padding: 10px">X</td>
+              <td style="border: 1px solid #000; padding: 10px">X</td>
+            </tr>
+            <tr>
+              <th style="border: 1px solid #000; padding: 10px">Permissions</th>
+              <td style="border: 1px solid #000; padding: 10px">X</td>
+              <td style="border: 1px solid #000; padding: 10px">X</td>
+              <td style="border: 1px solid #000; padding: 10px">X</td>
+            </tr>
+            <tr>
+              <th style="border: 1px solid #000; padding: 10px">Sharing</th>
+              <td style="border: 1px solid #000; padding: 10px"></td>
+              <td style="border: 1px solid #000; padding: 10px">X</td>
+              <td style="border: 1px solid #000; padding: 10px">X</td>
+            </tr>
+            <tr>
+              <th style="border: 1px solid #000; padding: 10px">
+                Unlimited members
+              </th>
+              <td style="border: 1px solid #000; padding: 10px"></td>
+              <td style="border: 1px solid #000; padding: 10px">X</td>
+              <td style="border: 1px solid #000; padding: 10px">X</td>
+            </tr>
+            <tr>
+              <th style="border: 1px solid #000; padding: 10px">
+                Extra security
+              </th>
+              <td style="border: 1px solid #000; padding: 10px"></td>
+              <td style="border: 1px solid #000; padding: 10px"></td>
+              <td style="border: 1px solid #000; padding: 10px">X</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+
+    <footer
+      style="
+        border-top: 1px solid var(--border);
+        padding: 1rem 2rem;
+        color: var(--muted);
+        display: flex;
+        gap: 2rem;
+        justify-content: center;
+        flex-wrap: wrap;
+      "
+    >
+      <a href="#">Amazing Product</a>
+      <a href="#">Features</a>
+      <a href="#">Enterprise</a>
+      <a href="#">Support</a>
+      <a href="#">Pricing</a>
+    </footer>
+  </body>
+</html>
