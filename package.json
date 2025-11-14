@@ -24,8 +24,8 @@
     },
     "devDependencies": {
         "hs-test-web": "https://github.com/hyperskill/hs-test-web/archive/release.tar.gz",
-        "mocha": "^10.8.2",
-        "prettier": "3.4.2",
-        "puppeteer": "^24.17.0"
+        "mocha": "11.7.5",
+        "prettier": "3.6.2",
+        "puppeteer": "24.30.0"
     }
 }
