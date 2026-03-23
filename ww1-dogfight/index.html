@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        <title>Skyfront: Low-Poly Dogfight</title>
+        <link rel="stylesheet" href="./styles.css" />
+    </head>
+    <body>
+        <div id="hud" aria-live="polite">
+            <div class="hud-topline">
+                <span id="status">READY</span>
+                <span id="wep">100 % WEP</span>
+            </div>
+            <div class="hud-grid">
+                <span class="hud-label">IAS</span>
+                <span class="hud-value" id="speed">0 KM/H</span>
+
+                <span class="hud-label">ALT</span>
+                <span class="hud-value" id="alt">0 M</span>
+
+                <span class="hud-label">THR</span>
+                <span class="hud-value" id="throttle">0%</span>
+
+                <span class="hud-label">RALT</span>
+                <span class="hud-value" id="ralt">0 M</span>
+
+                <span class="hud-label">HP</span>
+                <span class="hud-value" id="hp">100</span>
+
+                <span class="hud-label">GUN</span>
+                <span class="hud-value" id="ammo">0</span>
+
+                <span class="hud-label">RKT</span>
+                <span class="hud-value" id="rockets">0</span>
+
+                <span class="hud-label">BMB</span>
+                <span class="hud-value" id="bombs">0</span>
+
+                <span class="hud-label">ENG</span>
+                <span class="hud-value" id="engine-mode">MIL</span>
+
+                <span class="hud-label">FOE</span>
+                <span class="hud-value" id="enemies">0</span>
+
+                <span class="hud-label">SCR</span>
+                <span class="hud-value" id="score">0</span>
+
+                <span class="hud-label">MODE</span>
+                <span class="hud-value" id="fun-mode">STD</span>
+            </div>
+            <div class="hud-mission" id="mission">MISSION READY</div>
+        </div>
+
+        <div id="radar" aria-hidden="true">
+            <div class="radar-face">
+                <div class="radar-ring radar-ring-outer"></div>
+                <div class="radar-ring radar-ring-inner"></div>
+                <div class="radar-cardinal radar-n">N</div>
+                <div class="radar-cardinal radar-e">E</div>
+                <div class="radar-cardinal radar-s">S</div>
+                <div class="radar-cardinal radar-w">W</div>
+                <div class="radar-sweep"></div>
+                <div class="radar-ship" id="radar-ship"></div>
+                <div id="radar-contacts"></div>
+            </div>
+        </div>
+
+        <div id="reticle" aria-hidden="true"></div>
+        <div id="marker-layer" aria-hidden="true"></div>
+
+        <div id="settings-shell">
+            <button id="settings-toggle" type="button" aria-expanded="false">Settings</button>
+            <div id="settings-panel" aria-label="Game settings"></div>
+        </div>
+
+        <div id="banner" role="status"></div>
+
+        <script type="module" src="./dist/index.js"></script>
+    </body>
+</html>

@@ -7,7 +7,12 @@
     "scripts": {
         "start": "node index.js",
         "test": "mocha",
-        "prettier": "prettier --write ."
+        "prettier": "prettier --write .",
+        "typecheck": "tsc -p tsconfig.json",
+        "lint": "eslint \"src/**/*.ts\" \"ww1-dogfight/**/*.ts\" \"test/**/*.d.ts\"",
+        "build:ww1-dogfight": "tsc -p tsconfig.ww1-dogfight.json",
+        "typecheck:ww1-dogfight": "tsc -p tsconfig.ww1-dogfight.json --noEmit",
+        "lint:ww1-dogfight": "eslint \"ww1-dogfight/**/*.ts\""
     },
     "repository": {
         "type": "git",
@@ -23,9 +28,16 @@
         "sync-input": "https://github.com/hyperskill/sync-input/archive/v1.tar.gz"
     },
     "devDependencies": {
+        "@eslint/js": "^9.39.4",
+        "@typescript-eslint/eslint-plugin": "^8.57.1",
+        "@typescript-eslint/parser": "^8.57.1",
+        "eslint": "^9.39.4",
+        "globals": "^17.4.0",
         "hs-test-web": "https://github.com/hyperskill/hs-test-web/archive/release.tar.gz",
-        "mocha": "11.7.5",
-        "prettier": "3.6.2",
-        "puppeteer": "24.30.0"
+        "mocha": "^10.8.2",
+        "prettier": "3.4.2",
+        "puppeteer": "^24.17.0",
+        "three": "^0.183.2",
+        "typescript": "^5.9.3"
     }
 }

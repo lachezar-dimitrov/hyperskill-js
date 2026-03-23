@@ -105,6 +105,7 @@ dist/
 
 # Temporary folders
 tmp/
+.tmp/
 temp/
 
 # OS generated files #
@@ -119,3 +120,6 @@ Thumbs.db
 
 
 # End of https://www.gitignore.io/api/nod
+
+# Standalone ww1-dogfight build output
+ww1-dogfight/dist/

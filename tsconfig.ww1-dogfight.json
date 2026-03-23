@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "rootDir": "ww1-dogfight",
+    "outDir": "ww1-dogfight/dist",
+    "noEmit": false,
+    "types": []
+  },
+  "include": [
+    "ww1-dogfight/**/*.ts",
+    "ww1-dogfight/**/*.d.ts"
+  ]
+}
