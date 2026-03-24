@@ -1,12 +1,31 @@
-// @ts-nocheck
-export function createWaveDirector({ objectives, spawnEnemyWave, showBanner }) {
+import type { ObjectiveUpdateSnapshot } from "../core/game-types.js";
+
+interface WaveTrigger {
+    key: string;
+    threshold: number;
+    count: number;
+    text: string;
+}
+
+export function createWaveDirector({
+    objectives: _objectives,
+    spawnEnemyWave,
+    showBanner,
+}: {
+    objectives: unknown;
+    spawnEnemyWave: (count: number) => void;
+    showBanner: (text: string, duration?: number) => void;
+}): {
+    update(snapshot: ObjectiveUpdateSnapshot): void;
+    reset(): void;
+} {
     const triggers = [
         { key: "counter", threshold: 2, count: 2, text: "ENEMY REINFORCEMENTS" },
         { key: "scramble", threshold: 4, count: 3, text: "BASE SCRAMBLE" },
-    ];
-    const fired = new Set();
+    ] satisfies WaveTrigger[];
+    const fired = new Set<string>();
 
-    function update(snapshot) {
+    function update(snapshot: ObjectiveUpdateSnapshot): void {
         const destroyed = snapshot.enemyGroundTotal - snapshot.enemyGroundAlive;
         for (const trigger of triggers) {
             if (fired.has(trigger.key)) continue;
@@ -18,7 +37,7 @@ export function createWaveDirector({ objectives, spawnEnemyWave, showBanner }) {
         }
     }
 
-    function reset() {
+    function reset(): void {
         fired.clear();
     }
 

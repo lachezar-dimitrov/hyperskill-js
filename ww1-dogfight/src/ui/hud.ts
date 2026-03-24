@@ -7,7 +7,6 @@ interface HudEntities {
 
 interface HudState {
     score: number;
-    funMode: boolean;
 }
 
 interface HudObjectives {
@@ -62,6 +61,6 @@ export function updateHud({
     hud.bombs.textContent = `${entities.player.userData.bombs ?? 0}`;
     hud.enemies.textContent = `${entities.enemies.filter((enemy) => enemy.userData.hp > 0).length}`;
     hud.engineMode.textContent = entities.player.userData.wepActive ? "WEP" : "MIL";
-    hud.funMode.textContent = state.funMode ? "FUN" : "STD";
+    hud.funMode.textContent = entities.player.userData.spec?.label ?? "FIGHTER";
     hud.hp.classList.toggle("danger", entities.player.userData.hp < 35);
 }

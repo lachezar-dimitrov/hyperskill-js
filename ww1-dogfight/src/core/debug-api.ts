@@ -1,4 +1,5 @@
-// @ts-nocheck
+import type { DebugApi, DebugSnapshot, GameEntities, InputController, PlaneEntity } from "./game-types.js";
+
 export function attachDebugApi({
     window,
     keys,
@@ -11,8 +12,23 @@ export function attachDebugApi({
     rightOf,
     resetPlayer,
     tick,
-}) {
-    function snapshotState() {
+}: {
+    window: Window;
+    keys: InputController["keys"];
+    mouse: InputController["mouse"];
+    reticle: HTMLElement | null;
+    entities: GameEntities;
+    camera: import("three").Camera;
+    forwardOf: (plane: PlaneEntity) => import("three").Vector3;
+    upOf: (plane: PlaneEntity) => import("three").Vector3;
+    rightOf: (plane: PlaneEntity) => import("three").Vector3;
+    resetPlayer: () => void;
+    tick: (dt: number, options?: { updateAI?: boolean; renderFrame?: boolean }) => void;
+}): void {
+    function snapshotState(): DebugSnapshot {
+        if (!entities.player) {
+            throw new Error("Debug API requires a player entity");
+        }
         const playerForward = forwardOf(entities.player);
         const playerUp = upOf(entities.player);
         const playerRight = rightOf(entities.player);
@@ -42,7 +58,7 @@ export function attachDebugApi({
         };
     }
 
-    function clearInputs() {
+    function clearInputs(): void {
         for (const key of Object.keys(keys)) {
             delete keys[key];
         }
@@ -51,14 +67,14 @@ export function attachDebugApi({
         mouse.dragging = false;
     }
 
-    window.__dogfight = {
+    const api: DebugApi = {
         ready: true,
         getState: snapshotState,
         resetPlayer: () => {
             clearInputs();
             resetPlayer();
         },
-        setKey: (code, pressed) => {
+        setKey: (code: string, pressed: boolean) => {
             keys[code] = !!pressed;
         },
         clearInputs,
@@ -73,4 +89,5 @@ export function attachDebugApi({
             return snapshotState();
         },
     };
+    window.__dogfight = api;
 }

@@ -1,6 +1,8 @@
 import type { ControlBindings, GameSettings, SettingsRoot, ToggleButton } from "../core/game-types.js";
 import { loadStoredSettings, mergeSettings, saveStoredSettings } from "./storage.js";
 
+const DEFAULT_AIRCRAFT_TYPE: GameSettings["gameplay"]["aircraftType"] = "fighter";
+
 export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
     controls: {
         pitchDown: "KeyW",
@@ -23,9 +25,15 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
         effectsVolume: 0.1,
     },
     gameplay: {
-        funMode: false,
+        aircraftType: DEFAULT_AIRCRAFT_TYPE,
     },
 });
+
+const AIRCRAFT_LABELS: ReadonlyArray<readonly [GameSettings["gameplay"]["aircraftType"], string]> = [
+    ["fighter", "Fighter"],
+    ["bomber", "Bomber"],
+    ["jet", "Jet"],
+];
 
 const CONTROL_LABELS: ReadonlyArray<readonly [keyof ControlBindings, string]> = [
     ["pitchDown", "Pitch Down"],
@@ -70,6 +78,10 @@ function isInputElement(value: EventTarget | null): value is HTMLInputElement {
     return value instanceof HTMLInputElement;
 }
 
+function isSelectElement(value: EventTarget | null): value is HTMLSelectElement {
+    return value instanceof HTMLSelectElement;
+}
+
 export function createSettingsController({
     root,
     toggleButton,
@@ -109,10 +121,10 @@ export function createSettingsController({
         emitChange();
     }
 
-    function updateFunMode(funMode: boolean): void {
+    function updateAircraftType(aircraftType: GameSettings["gameplay"]["aircraftType"]): void {
         settings = mergeSettings(settings, {
             gameplay: {
-                funMode,
+                aircraftType,
             },
         });
         emitChange();
@@ -165,8 +177,13 @@ export function createSettingsController({
             <div class="settings-section">
                 <div class="settings-title">Gameplay</div>
                 <label class="slider-row">
-                    <span>Fun Mode</span>
-                    <input type="checkbox" ${settings.gameplay.funMode ? "checked" : ""} data-gameplay="funMode" />
+                    <span>Aircraft</span>
+                    <select data-gameplay="aircraftType">
+                        ${AIRCRAFT_LABELS.map(
+                            ([id, label]) =>
+                                `<option value="${id}" ${settings.gameplay.aircraftType === id ? "selected" : ""}>${label}</option>`,
+                        ).join("")}
+                    </select>
                 </label>
             </div>
             <div class="settings-actions">
@@ -199,17 +216,22 @@ export function createSettingsController({
     });
 
     root.addEventListener("input", (event) => {
-        if (!isInputElement(event.target)) return;
         const target = event.target;
-        const audioKey = target.dataset["audio"];
-        if (audioKey === "engineVolume" || audioKey === "effectsVolume") {
-            updateAudioSetting(audioKey, Number(target.value) / 100);
-            return;
+        if (isInputElement(target)) {
+            const audioKey = target.dataset["audio"];
+            if (audioKey === "engineVolume" || audioKey === "effectsVolume") {
+                updateAudioSetting(audioKey, Number(target.value) / 100);
+                return;
+            }
         }
 
-        const gameplayKey = target.dataset["gameplay"];
-        if (gameplayKey === "funMode") {
-            updateFunMode(target.checked);
+        if (isSelectElement(target)) {
+            const gameplayKey = target.dataset["gameplay"];
+            if (gameplayKey === "aircraftType") {
+                if (target.value === "fighter" || target.value === "bomber" || target.value === "jet") {
+                    updateAircraftType(target.value);
+                }
+            }
         }
     });
 

@@ -1,10 +1,34 @@
-// @ts-nocheck
-export function createCameraController({ THREE, camera, cfg, entities, forwardOf }) {
+import type { CameraController, CameraUpdateOptions, GameConfig, GameEntities, PlaneEntity, ThreeModule } from "../core/game-types.js";
+
+export function createCameraController({
+    THREE,
+    camera,
+    cfg,
+    entities,
+    forwardOf,
+}: {
+    THREE: ThreeModule;
+    camera: import("three").PerspectiveCamera;
+    cfg: GameConfig;
+    entities: GameEntities;
+    forwardOf: (plane: PlaneEntity) => import("three").Vector3;
+}): CameraController {
     let ready = false;
     let freeLookYaw = 0;
     let freeLookPitch = 0;
 
-    function getTarget(lookBack) {
+    function getCurrentSpeed(): number {
+        return entities.player?.userData?.vel?.length?.() || 0;
+    }
+
+    function shouldHardLock(): boolean {
+        return getCurrentSpeed() > cfg.player.maxSpeed * 1.02;
+    }
+
+    function getTarget(lookBack: boolean): import("three").Vector3 {
+        if (!entities.player) {
+            throw new Error("Camera controller requires a player entity");
+        }
         const forward = forwardOf(entities.player);
         const backOffset = lookBack ? cfg.camera.front : -cfg.camera.back;
         const upOffset = lookBack ? cfg.camera.rearUp : cfg.camera.up;
@@ -14,7 +38,10 @@ export function createCameraController({ THREE, camera, cfg, entities, forwardOf
             .add(new THREE.Vector3(0, upOffset, 0));
     }
 
-    function snap(lookBack) {
+    function snap(lookBack: boolean): void {
+        if (!entities.player) {
+            throw new Error("Camera controller requires a player entity");
+        }
         const forward = forwardOf(entities.player);
         camera.position.copy(getTarget(lookBack));
         if (lookBack) {
@@ -25,22 +52,26 @@ export function createCameraController({ THREE, camera, cfg, entities, forwardOf
         ready = true;
     }
 
-    function reset() {
+    function reset(): void {
         ready = false;
         freeLookYaw = 0;
         freeLookPitch = 0;
     }
 
-    function update({ dt, lookBack, freeLook, mouseDx = 0, mouseDy = 0, mouseSens = 0.0015, zoomed }) {
+    function update({ dt: _dt, lookBack, freeLook, mouseDx = 0, mouseDy = 0, mouseSens = 0.0015, zoomed }: CameraUpdateOptions): void {
+        if (!entities.player) {
+            throw new Error("Camera controller requires a player entity");
+        }
         const forward = forwardOf(entities.player);
         const camTarget = getTarget(lookBack);
         const targetDistance = camera.position.distanceTo(camTarget);
-        const speed = entities.player?.userData?.vel?.length?.() || 0;
+        const speed = getCurrentSpeed();
         const highSpeedFollow = speed > cfg.player.maxSpeed * 1.45;
+        const hardLock = shouldHardLock();
         const followLerp = highSpeedFollow ? 0.28 : cfg.camera.lerp;
         const catchupDistance = highSpeedFollow ? 18 : 45;
 
-        if (!ready || targetDistance > catchupDistance) {
+        if (hardLock || !ready || targetDistance > catchupDistance) {
             camera.position.copy(camTarget);
             ready = true;
         } else {
@@ -60,7 +91,7 @@ export function createCameraController({ THREE, camera, cfg, entities, forwardOf
             orbitOffset.applyQuaternion(entities.player.quaternion);
 
             const orbitTarget = entities.player.position.clone().add(orbitOffset);
-            if (!ready || camera.position.distanceTo(orbitTarget) > (highSpeedFollow ? 22 : 55)) {
+            if (hardLock || !ready || camera.position.distanceTo(orbitTarget) > (highSpeedFollow ? 22 : 55)) {
                 camera.position.copy(orbitTarget);
             } else {
                 camera.position.lerp(orbitTarget, highSpeedFollow ? 0.32 : 0.18);

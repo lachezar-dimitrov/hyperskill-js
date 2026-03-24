@@ -141,7 +141,6 @@ const state = {
     respawn: 0,
     zoomed: false,
     outcome: "active",
-    funMode: false,
 };
 
 const spawnSystem = createSpawnSystem({
@@ -154,6 +153,7 @@ const spawnSystem = createSpawnSystem({
     syncPlaneOrientation,
     state,
     camera,
+    getAircraftType: () => settings.gameplay.aircraftType,
 });
 const { resetPlayer, spawnEnemyWave } = spawnSystem;
 spawnSystem.initializeForces();
@@ -182,9 +182,12 @@ const settingsController = createSettingsController({
     toggleButton: settingsToggle,
     onChange(nextSettings) {
         settings = nextSettings;
-        state.funMode = !!nextSettings.gameplay.funMode;
         engineAudio.setVolume(settings.audio.engineVolume);
         soundEffects.setVolume(settings.audio.effectsVolume);
+        if (entities.player?.userData?.spec?.id !== nextSettings.gameplay.aircraftType) {
+            resetPlayer();
+            showBanner(`${nextSettings.gameplay.aircraftType.toUpperCase()} READY`, 900);
+        }
     },
 });
 
@@ -389,7 +392,7 @@ function tick(dt, { updateAI = true, renderFrame = true } = {}) {
     // Player input
     const data = entities.player.userData;
     if (data.hp > 0) {
-        const speedMultiplier = settings.gameplay.funMode ? 3 : 1;
+        const speedMultiplier = data.spec?.speedMultiplier ?? 1;
         const lookBack = !!keys[settings.controls.lookBack];
         const freeLook = !!keys[settings.controls.freeLook];
         const yawKey = (keys[settings.controls.yawLeft] ? 0.6 : 0) + (keys[settings.controls.yawRight] ? -0.6 : 0);
@@ -430,11 +433,13 @@ function tick(dt, { updateAI = true, renderFrame = true } = {}) {
         if (state.outcome === "active" && keys[settings.controls.rockets]) spawnRocket(entities.player);
         if (state.outcome === "active" && keys[settings.controls.bombs]) spawnBomb(entities.player);
 
-        data.hp = Math.min(CFG.player.hp, data.hp + CFG.player.hpRegen * dt);
+        const hpMax = data.spec?.hp ?? CFG.player.hp;
+        data.hp = Math.min(hpMax, data.hp + CFG.player.hpRegen * dt);
 
         data.ammoReloadBuffer += CFG.player.ammoReloadPerSecond * dt;
-        if (data.ammo < CFG.player.ammo) {
-            const ammoToAdd = Math.min(CFG.player.ammo - data.ammo, Math.floor(data.ammoReloadBuffer));
+        const ammoMax = data.spec?.ammo ?? CFG.player.ammo;
+        if (data.ammo < ammoMax) {
+            const ammoToAdd = Math.min(ammoMax - data.ammo, Math.floor(data.ammoReloadBuffer));
             if (ammoToAdd > 0) {
                 data.ammo += ammoToAdd;
                 data.ammoReloadBuffer -= ammoToAdd;
@@ -443,7 +448,8 @@ function tick(dt, { updateAI = true, renderFrame = true } = {}) {
             data.ammoReloadBuffer = 0;
         }
 
-        if (data.rockets < CFG.rockets.count) {
+        const rocketMax = data.spec?.rockets ?? CFG.rockets.count;
+        if (data.rockets < rocketMax) {
             data.rocketReloadTimer += dt;
             if (data.rocketReloadTimer >= CFG.rockets.reloadInterval) {
                 data.rockets += 1;
@@ -453,7 +459,8 @@ function tick(dt, { updateAI = true, renderFrame = true } = {}) {
             data.rocketReloadTimer = 0;
         }
 
-        if (data.bombs < CFG.bombs.count) {
+        const bombMax = data.spec?.bombs ?? CFG.bombs.count;
+        if (data.bombs < bombMax) {
             data.bombReloadTimer += dt;
             if (data.bombReloadTimer >= CFG.bombs.reloadInterval) {
                 data.bombs += 1;
@@ -508,7 +515,14 @@ function tick(dt, { updateAI = true, renderFrame = true } = {}) {
         p.userData.fireCd = Math.max(0, p.userData.fireCd - dt);
         p.userData.rocketCd = Math.max(0, (p.userData.rocketCd || 0) - dt);
         p.userData.bombCd = Math.max(0, (p.userData.bombCd || 0) - dt);
-        if (p.userData.prop) p.userData.prop.rotation.x += dt * 30;
+        if (p.userData.propellers?.length) {
+            const propSpin = (p.userData.spec?.engineType ?? "prop") === "jet" ? 0 : dt * 30;
+            p.userData.propellers.forEach((prop) => {
+                prop.rotation.x += propSpin;
+            });
+        } else if (p.userData.prop) {
+            p.userData.prop.rotation.x += dt * 30;
+        }
         updateControlSurfaces(p);
     });
 

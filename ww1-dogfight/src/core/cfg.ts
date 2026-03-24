@@ -1,5 +1,12 @@
-// @ts-nocheck
-export const CFG = Object.freeze({
+import type { GameConfig } from "./game-types.js";
+
+const FIGHTER_ID: GameConfig["aircraft"]["fighter"]["id"] = "fighter";
+const BOMBER_ID: GameConfig["aircraft"]["bomber"]["id"] = "bomber";
+const JET_ID: GameConfig["aircraft"]["jet"]["id"] = "jet";
+const PROP_ENGINE: GameConfig["aircraft"]["fighter"]["engineType"] = "prop";
+const JET_ENGINE: GameConfig["aircraft"]["jet"]["engineType"] = "jet";
+
+export const CFG: Readonly<GameConfig> = Object.freeze({
     world: {
         size: 10000,
         groundScale: 135,
@@ -36,6 +43,68 @@ export const CFG = Object.freeze({
         ammo: 420,
         hp: 120,
     },
+    aircraft: {
+        fighter: {
+            id: FIGHTER_ID,
+            label: "FTR",
+            roleLabel: "FIGHTER",
+            engineType: PROP_ENGINE,
+            engineCount: 1,
+            maxThrust: 58,
+            boostThrust: 90,
+            turnRateMul: 1.08,
+            pitchRateMul: 1.06,
+            rollRateMul: 1.12,
+            speedMultiplier: 2,
+            hp: 135,
+            ammo: 640,
+            rockets: 8,
+            bombs: 0,
+            gunHardpoints: [-8.8, -3.8, 3.8, 8.8],
+            rocketHardpoints: [-10.6, -8.2, -5.6, -3.2, 3.2, 5.6, 8.2, 10.6],
+            bombHardpoints: [],
+        },
+        bomber: {
+            id: BOMBER_ID,
+            label: "BMB",
+            roleLabel: "BOMBER",
+            engineType: PROP_ENGINE,
+            engineCount: 2,
+            maxThrust: 46,
+            boostThrust: 54,
+            turnRateMul: 0.52,
+            pitchRateMul: 0.48,
+            rollRateMul: 0.42,
+            speedMultiplier: 1,
+            hp: 240,
+            ammo: 0,
+            rockets: 0,
+            bombs: 10,
+            gunHardpoints: [],
+            rocketHardpoints: [],
+            bombHardpoints: [-10.5, -8.2, -5.9, -3.6, -1.3, 1.3, 3.6, 5.9, 8.2, 10.5],
+        },
+        jet: {
+            id: JET_ID,
+            label: "JET",
+            roleLabel: "JET",
+            engineType: JET_ENGINE,
+            engineCount: 1,
+            maxThrust: 68,
+            boostThrust: 118,
+            turnRateMul: 0.86,
+            pitchRateMul: 0.92,
+            rollRateMul: 1.25,
+            speedMultiplier: 4,
+            hp: 110,
+            ammo: 320,
+            rockets: 0,
+            bombs: 0,
+            gunHardpoints: [-2.4, 2.4],
+            rocketHardpoints: [],
+            bombHardpoints: [],
+        },
+    },
     physics: {
         gravity: 0,
         drag: 0,
@@ -54,22 +123,22 @@ export const CFG = Object.freeze({
         ttl: 2.4,
     },
     rockets: {
-        count: 6,
+        count: 8,
         cooldown: 0.28,
         reloadInterval: 5.5,
-        speed: 230,
-        damage: 170,
-        radius: 26,
+        speed: 280,
+        damage: 260,
+        radius: 32,
         ttl: 5.5,
         muzzleOffset: 2.8,
     },
     bombs: {
-        count: 4,
+        count: 10,
         cooldown: 0.45,
         reloadInterval: 8,
         gravity: 55,
-        damage: 240,
-        radius: 34,
+        damage: 420,
+        radius: 52,
         ttl: 8,
         dropOffset: 1.2,
     },

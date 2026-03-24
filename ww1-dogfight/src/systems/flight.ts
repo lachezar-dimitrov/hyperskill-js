@@ -17,9 +17,10 @@ export function createFlightSystem({
 
     function applyControls(plane, input, dt, boost = false, speedMultiplier = 1) {
         const data = plane.userData;
-        const yawDelta = input.yawInput * cfg.player.turnRate * dt;
-        const pitchDelta = input.pitchInput * cfg.player.pitchRate * dt;
-        const rollDelta = input.rollInput * cfg.player.rollRate * dt;
+        const spec = data.spec ?? {};
+        const yawDelta = input.yawInput * cfg.player.turnRate * (spec.turnRateMul ?? 1) * dt;
+        const pitchDelta = input.pitchInput * cfg.player.pitchRate * (spec.pitchRateMul ?? 1) * dt;
+        const rollDelta = input.rollInput * cfg.player.rollRate * (spec.rollRateMul ?? 1) * dt;
         data.controlState = {
             yaw: input.yawInput,
             pitch: input.pitchInput,
@@ -36,7 +37,9 @@ export function createFlightSystem({
         data.roll += rollDelta;
         syncPlaneOrientation(plane);
 
-        const thrust = (boost ? cfg.player.boostThrust : cfg.player.maxThrust) * speedMultiplier;
+        const thrust =
+            (boost ? (spec.boostThrust ?? cfg.player.boostThrust) : (spec.maxThrust ?? cfg.player.maxThrust)) *
+            speedMultiplier;
         data.vel.copy(forward.multiplyScalar(thrust * data.throttle));
         updateControlSurfaces?.(plane);
     }

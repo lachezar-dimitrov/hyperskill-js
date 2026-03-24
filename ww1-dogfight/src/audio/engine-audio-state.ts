@@ -5,6 +5,9 @@ export function createEngineAudioStateReaders({ entities, THREE }) {
             return {
                 throttle: entities.player?.userData?.throttle ?? 0,
                 speed: entities.player?.userData?.vel.length() ?? 0,
+                engineType: entities.player?.userData?.spec?.engineType ?? "prop",
+                engineCount: entities.player?.userData?.spec?.engineCount ?? 1,
+                wepActive: !!entities.player?.userData?.wepActive,
             };
         },
         getEnemyState() {

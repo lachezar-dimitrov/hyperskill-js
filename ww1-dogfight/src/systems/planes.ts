@@ -1,5 +1,7 @@
 // @ts-nocheck
 export function createPlaneFactory({ THREE, scene, cfg, syncPlaneOrientation }) {
+    const aircraftPresets = cfg.aircraft;
+
     function makeMaterial(color, roughness = 0.58) {
         return new THREE.MeshStandardMaterial({ color, flatShading: true, roughness });
     }
@@ -64,6 +66,32 @@ export function createPlaneFactory({ THREE, scene, cfg, syncPlaneOrientation }) 
             rockets.push(rocket);
         }
         return rockets;
+    }
+
+    function addGunPods(art, detailMat, x, zPositions, y = -0.34) {
+        const guns = [];
+        for (const z of zPositions) {
+            const gun = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.18, 0.22), detailMat);
+            gun.position.set(x, y, z);
+            art.add(gun);
+            guns.push(gun);
+        }
+        return guns;
+    }
+
+    function addBombs(art, accentMat, detailMat, x, zPositions, y = -0.9) {
+        const bombs = [];
+        for (const z of zPositions) {
+            const bomb = new THREE.Group();
+            bomb.position.set(x, y, z);
+            const body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 0), detailMat);
+            const tail = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 0.18), accentMat);
+            tail.position.x = -0.34;
+            bomb.add(body, tail);
+            art.add(bomb);
+            bombs.push(bomb);
+        }
+        return bombs;
     }
 
     function createRudderSurface(THREE, material, points, depth = 0.08) {
@@ -195,14 +223,19 @@ export function createPlaneFactory({ THREE, scene, cfg, syncPlaneOrientation }) 
         art.add(radiator, radiator.clone());
         art.children[art.children.length - 1].position.z = -3.45;
 
-        const rocketMeshes = addRockets(art, accentMat, detailMat, 2.2, [-6.4, -8.7, -10.8, 6.4, 8.7, 10.8]);
+        const rocketMeshes = addRockets(art, accentMat, detailMat, 2.2, [-10.6, -8.2, -5.6, -3.2, 3.2, 5.6, 8.2, 10.6]);
+        const gunMeshes = addGunPods(art, detailMat, 4.2, [-8.8, -3.8, 3.8, 8.8], -0.18);
         const prop = addPropeller(art, accentMat, 8.35, 3.9);
         return {
             prop,
+            propellers: [prop],
             rudder,
             elevators: [elevatorLeft.pivot, elevatorRight.pivot],
             ailerons: [aileronLeft.pivot, aileronRight.pivot],
             rocketMeshes,
+            bombMeshes: [],
+            gunMeshes,
+            afterburner: null,
         };
     }
 
@@ -321,10 +354,183 @@ export function createPlaneFactory({ THREE, scene, cfg, syncPlaneOrientation }) 
         const prop = addPropeller(art, accentMat, 8.1, 3.8);
         return {
             prop,
+            propellers: [prop],
             rudder,
             elevators: [elevatorLeft.pivot, elevatorRight.pivot],
             ailerons: [aileronLeft.pivot, aileronRight.pivot],
             rocketMeshes,
+            bombMeshes: [],
+            gunMeshes: [],
+            afterburner: null,
+        };
+    }
+
+    function buildBomber(THREE, art, bodyMat, accentMat, detailMat) {
+        const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.8, 16.5, 8), bodyMat);
+        fuselage.rotation.z = Math.PI / 2;
+        fuselage.position.set(-0.7, 0.12, 0);
+        art.add(fuselage);
+
+        const glassNose = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.42, 3.1, 8), accentMat);
+        glassNose.rotation.z = Math.PI / 2;
+        glassNose.position.set(8.6, 0.08, 0);
+        glassNose.scale.set(1, 0.95, 0.95);
+        art.add(glassNose);
+
+        const canopy = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.9, 1.45), accentMat);
+        canopy.position.set(-1.2, 1.25, 0);
+        art.add(canopy);
+
+        const wingRoot = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.22, 8.4), bodyMat);
+        wingRoot.position.set(0.8, 0, 0);
+        art.add(wingRoot);
+
+        const wingOuter = new THREE.Mesh(new THREE.BoxGeometry(6.1, 0.18, 5.2), bodyMat);
+        wingOuter.position.set(2.0, 0.02, 0);
+        const [wingOuterL, wingOuterR] = addPair(art, () => wingOuter.clone(), 8.5);
+        wingOuterL.rotation.z = -0.04;
+        wingOuterR.rotation.z = 0.04;
+
+        const engineNacelle = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.74, 2.9, 8), accentMat);
+        engineNacelle.rotation.z = Math.PI / 2;
+        engineNacelle.position.set(2.8, -0.28, 0);
+        const nacelleLeft = engineNacelle.clone();
+        const nacelleRight = engineNacelle.clone();
+        nacelleLeft.position.z = -5.8;
+        nacelleRight.position.z = 5.8;
+        art.add(nacelleLeft, nacelleRight);
+
+        const wingProps = [];
+        wingProps.push(addPropeller(art, accentMat, 4.45, 3.55));
+        wingProps[0].position.z = -5.8;
+        wingProps.push(addPropeller(art, accentMat, 4.45, 3.55));
+        wingProps[1].position.z = 5.8;
+
+        const tailBoom = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 1.08, 5.2, 6), bodyMat);
+        tailBoom.rotation.z = Math.PI / 2;
+        tailBoom.position.set(-8.7, 0.45, 0);
+        art.add(tailBoom);
+
+        const stabilizer = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.14, 5.6), bodyMat);
+        stabilizer.position.set(-10.8, 1.0, 0);
+        art.add(stabilizer);
+
+        const elevatorGeo = new THREE.BoxGeometry(1.8, 0.12, 2.2);
+        const elevatorLeft = makeSurfacePivot(THREE, elevatorGeo, accentMat, new THREE.Vector3(-11.2, 0.92, 0), -3.25);
+        const elevatorRight = makeSurfacePivot(THREE, elevatorGeo, accentMat, new THREE.Vector3(-11.2, 0.92, 0), 3.25);
+        art.add(elevatorLeft.pivot, elevatorRight.pivot);
+
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.18, 3.2, 0.28), bodyMat);
+        fin.position.set(-11.25, 2.55, 0);
+        art.add(fin);
+
+        const rudder = new THREE.Group();
+        rudder.position.set(-11.55, 2.35, 0);
+        const rudderMesh = createRudderSurface(THREE, accentMat, [
+            [0.0, -1.25],
+            [0.0, 1.2],
+            [0.7, 0.52],
+            [0.48, -1.05],
+        ]);
+        rudder.add(rudderMesh);
+        art.add(rudder);
+
+        const bombMeshes = addBombs(art, accentMat, detailMat, -0.6, [-10.5, -8.2, -5.9, -3.6, -1.3, 1.3, 3.6, 5.9, 8.2, 10.5], -0.92);
+        return {
+            prop: wingProps[0],
+            propellers: wingProps,
+            rudder,
+            elevators: [elevatorLeft.pivot, elevatorRight.pivot],
+            ailerons: [],
+            rocketMeshes: [],
+            bombMeshes,
+            gunMeshes: [],
+            afterburner: null,
+        };
+    }
+
+    function buildJet(THREE, art, bodyMat, accentMat, detailMat) {
+        const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 1.25, 14.2, 8), bodyMat);
+        fuselage.rotation.z = Math.PI / 2;
+        fuselage.position.set(-0.15, 0.08, 0);
+        art.add(fuselage);
+
+        const intake = new THREE.Mesh(new THREE.CylinderGeometry(1.02, 1.02, 1.2, 16), detailMat);
+        intake.rotation.z = Math.PI / 2;
+        intake.position.set(8.05, 0.05, 0);
+        art.add(intake);
+
+        const intakeHole = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 1.28, 16), makeMaterial(0x101418, 0.9));
+        intakeHole.rotation.z = Math.PI / 2;
+        intakeHole.position.set(8.12, 0.05, 0);
+        art.add(intakeHole);
+
+        const canopy = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.72, 1.2), accentMat);
+        canopy.position.set(0.2, 0.92, 0);
+        canopy.rotation.z = -0.08;
+        art.add(canopy);
+
+        const deltaWing = new THREE.Mesh(new THREE.BoxGeometry(6.8, 0.12, 9.6), bodyMat);
+        deltaWing.position.set(-0.2, 0.0, 0);
+        deltaWing.rotation.y = -0.18;
+        art.add(deltaWing);
+
+        const outerWing = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.08, 3.8), bodyMat);
+        outerWing.position.set(1.5, 0.0, 0);
+        outerWing.rotation.y = -0.38;
+        addPair(art, () => outerWing.clone(), 7.2);
+
+        const stabilizer = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 3.0), bodyMat);
+        stabilizer.position.set(-8.6, 0.42, 0);
+        art.add(stabilizer);
+
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.85, 0.22), bodyMat);
+        fin.position.set(-8.9, 1.9, 0);
+        art.add(fin);
+
+        const rudder = new THREE.Group();
+        rudder.position.set(-9.18, 1.9, 0);
+        const rudderMesh = createRudderSurface(THREE, accentMat, [
+            [0.0, -1.1],
+            [0.0, 1.0],
+            [0.62, 0.12],
+            [0.36, -0.96],
+        ]);
+        rudder.add(rudderMesh);
+        art.add(rudder);
+
+        const elevatorGeo = new THREE.BoxGeometry(1.22, 0.08, 1.4);
+        const elevatorLeft = makeSurfacePivot(THREE, elevatorGeo, accentMat, new THREE.Vector3(-8.92, 0.4, 0), -1.85);
+        const elevatorRight = makeSurfacePivot(THREE, elevatorGeo, accentMat, new THREE.Vector3(-8.92, 0.4, 0), 1.85);
+        art.add(elevatorLeft.pivot, elevatorRight.pivot);
+
+        const aileronGeo = new THREE.BoxGeometry(1.8, 0.06, 1.3);
+        const aileronLeft = makeSurfacePivot(THREE, aileronGeo, accentMat, new THREE.Vector3(1.55, -0.01, 0), -7.4, -0.16);
+        const aileronRight = makeSurfacePivot(THREE, aileronGeo, accentMat, new THREE.Vector3(1.55, -0.01, 0), 7.4, -0.16);
+        art.add(aileronLeft.pivot, aileronRight.pivot);
+
+        const gunMeshes = addGunPods(art, detailMat, 2.8, [-2.4, 2.4], -0.22);
+        const missileMeshes = addRockets(art, accentMat, detailMat, -1.2, [-5.8, 5.8], -0.4);
+
+        const afterburner = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.38, 0.68, 1.8, 8),
+            new THREE.MeshStandardMaterial({ color: 0xff8a22, emissive: 0xff7b1c, emissiveIntensity: 1.4, flatShading: true }),
+        );
+        afterburner.rotation.z = Math.PI / 2;
+        afterburner.position.set(-7.95, 0.02, 0);
+        afterburner.visible = false;
+        art.add(afterburner);
+
+        return {
+            prop: null,
+            propellers: [],
+            rudder,
+            elevators: [elevatorLeft.pivot, elevatorRight.pivot],
+            ailerons: [aileronLeft.pivot, aileronRight.pivot],
+            rocketMeshes: missileMeshes,
+            bombMeshes: [],
+            gunMeshes,
+            afterburner,
         };
     }
 
@@ -336,11 +542,21 @@ export function createPlaneFactory({ THREE, scene, cfg, syncPlaneOrientation }) 
         const roll = THREE.MathUtils.clamp(controlState.roll, -1, 1);
         const yaw = THREE.MathUtils.clamp(controlState.yaw, -1, 1);
 
-        controls.rudder.rotation.y = yaw * 0.35;
-        controls.elevators[0].rotation.z = -pitch * 0.28;
-        controls.elevators[1].rotation.z = -pitch * 0.28;
-        controls.ailerons[0].rotation.x = roll * 0.34;
-        controls.ailerons[1].rotation.x = -roll * 0.34;
+        if (controls.rudder) {
+            controls.rudder.rotation.y = yaw * 0.35;
+        }
+        if (controls.elevators?.[0]) {
+            controls.elevators[0].rotation.z = -pitch * 0.28;
+        }
+        if (controls.elevators?.[1]) {
+            controls.elevators[1].rotation.z = -pitch * 0.28;
+        }
+        if (controls.ailerons?.[0]) {
+            controls.ailerons[0].rotation.x = roll * 0.34;
+        }
+        if (controls.ailerons?.[1]) {
+            controls.ailerons[1].rotation.x = -roll * 0.34;
+        }
 
         if (controls.rocketMeshes) {
             const active = plane.userData.rockets ?? 0;
@@ -348,9 +564,21 @@ export function createPlaneFactory({ THREE, scene, cfg, syncPlaneOrientation }) 
                 rocket.visible = index < active;
             });
         }
+
+        if (controls.bombMeshes) {
+            const activeBombs = plane.userData.bombs ?? 0;
+            controls.bombMeshes.forEach((bomb, index) => {
+                bomb.visible = index < activeBombs;
+            });
+        }
+
+        if (controls.afterburner) {
+            controls.afterburner.visible = !!plane.userData.wepActive;
+            controls.afterburner.scale.x = plane.userData.wepActive ? 1.2 : 0.9;
+        }
     }
 
-    function makePlane(team, color = 0x9fd4ff, accent = 0xffb02e) {
+    function makePlane(team, color = 0x9fd4ff, accent = 0xffb02e, aircraftType = "fighter") {
         const root = new THREE.Group();
         const bank = new THREE.Group();
         const art = new THREE.Group();
@@ -358,16 +586,23 @@ export function createPlaneFactory({ THREE, scene, cfg, syncPlaneOrientation }) 
         const accentMat = makeMaterial(accent, 0.52);
         const detailMat = makeMaterial(0x3b4652, 0.68);
 
-        const controls =
-            team === "enemy"
-                ? buildBf109Like(THREE, art, bodyMat, accentMat, detailMat)
-                : buildSpitfireLike(THREE, art, bodyMat, accentMat, detailMat);
+        let controls;
+        if (team === "enemy") {
+            controls = buildBf109Like(THREE, art, bodyMat, accentMat, detailMat);
+        } else if (aircraftType === "bomber") {
+            controls = buildBomber(THREE, art, bodyMat, accentMat, detailMat);
+        } else if (aircraftType === "jet") {
+            controls = buildJet(THREE, art, bodyMat, accentMat, detailMat);
+        } else {
+            controls = buildSpitfireLike(THREE, art, bodyMat, accentMat, detailMat);
+        }
 
         art.rotation.y = -Math.PI / 2;
         bank.add(art);
         root.add(bank);
 
         root.userData.prop = controls.prop;
+        root.userData.propellers = controls.propellers || (controls.prop ? [controls.prop] : []);
         root.userData.mesh = bank;
         root.userData.art = art;
         root.userData.controls = controls;
@@ -375,31 +610,55 @@ export function createPlaneFactory({ THREE, scene, cfg, syncPlaneOrientation }) 
         return root;
     }
 
-    function spawnPlane(team, position, tint) {
-        const plane = makePlane(team, tint.base, tint.accent);
+    function spawnPlane(team, position, tint, aircraftType = team === "player" ? "fighter" : team === "enemy" ? "enemy" : "fighter") {
+        const preset =
+            team === "enemy"
+                ? {
+                      label: "ENY",
+                      roleLabel: "ENEMY",
+                      engineType: "prop",
+                      engineCount: 1,
+                      maxThrust: cfg.player.maxThrust,
+                      boostThrust: cfg.player.boostThrust,
+                      turnRateMul: 1,
+                      pitchRateMul: 1,
+                      rollRateMul: 1,
+                      speedMultiplier: 1,
+                      hp: cfg.team.enemyHp,
+                      ammo: 9999,
+                      rockets: 0,
+                      bombs: 0,
+                      gunHardpoints: [],
+                      rocketHardpoints: [],
+                      bombHardpoints: [],
+                  }
+                : aircraftPresets[aircraftType] || aircraftPresets.fighter;
+
+        const plane = makePlane(team, tint.base, tint.accent, aircraftType);
         plane.position.copy(position);
         plane.rotation.set(0, Math.random() * Math.PI * 2, 0);
         plane.userData = {
             ...plane.userData,
             team,
             vel: new THREE.Vector3(),
-            hp: team === "player" ? cfg.player.hp : team === "ally" ? cfg.team.wingmanHp : cfg.team.enemyHp,
+            hp: team === "ally" ? Math.max(cfg.team.wingmanHp, preset.hp * 0.82) : preset.hp,
             throttle: 0.6,
-            ammo: team === "player" ? cfg.player.ammo : 9999,
+            ammo: preset.ammo,
             ammoReloadBuffer: 0,
             fireCd: 0,
             rocketCd: 0,
-            rockets: team === "player" ? cfg.rockets.count : 0,
+            rockets: preset.rockets,
             rocketReloadTimer: 0,
             bombCd: 0,
-            bombs: team === "player" ? cfg.bombs.count : 0,
+            bombs: preset.bombs,
             bombReloadTimer: 0,
             respawn: 0,
-            wep: team === "player" ? cfg.player.wepMax : cfg.player.wepMax,
+            wep: cfg.player.wepMax,
             wepActive: false,
             yaw: plane.rotation.y,
             pitch: 0,
             roll: 0,
+            spec: preset,
             controlState: {
                 pitch: 0,
                 roll: 0,

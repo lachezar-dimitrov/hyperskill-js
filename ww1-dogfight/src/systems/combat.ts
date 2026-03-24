@@ -123,7 +123,7 @@ export function createCombatSystem({
 
     function spawnBullet(fromPlane) {
         const data = fromPlane.userData;
-        if (data.fireCd > 0 || data.ammo <= 0) return;
+        if (data.fireCd > 0 || data.ammo <= 0 || (data.spec?.gunHardpoints?.length ?? 0) === 0) return;
         data.fireCd = cfg.guns.rof;
         data.ammo -= 1;
         if (fromPlane === entities.player) {
@@ -136,37 +136,46 @@ export function createCombatSystem({
         }
 
         const forward = forwardOf(fromPlane);
-        const muzzle = fromPlane.position.clone().add(forward.clone().multiplyScalar(cfg.guns.muzzleOffset));
-        let shotDir = forward.clone();
+        const baseAimPoint =
+            fromPlane === entities.player && !keys[settings.controls.lookBack]
+                ? camera.position
+                      .clone()
+                      .add(getReticleAimDirection().multiplyScalar(cfg.guns.aimDistance))
+                      .add(new THREE.Vector3(0, cfg.guns.aimLift, 0))
+                : null;
+        const hardpoints = data.spec?.gunHardpoints?.length ? data.spec.gunHardpoints : [0];
 
-        if (fromPlane === entities.player && !keys[settings.controls.lookBack]) {
-            const aimDir = getReticleAimDirection();
-            const aimPoint = camera.position
+        for (const zOffset of hardpoints) {
+            const muzzle = fromPlane.position
                 .clone()
-                .add(aimDir.multiplyScalar(cfg.guns.aimDistance))
-                .add(new THREE.Vector3(0, cfg.guns.aimLift, 0));
-            shotDir = aimPoint.sub(muzzle).normalize();
+                .add(forward.clone().multiplyScalar(cfg.guns.muzzleOffset))
+                .add(new THREE.Vector3(0, -0.1, zOffset));
+            let shotDir = forward.clone();
+
+            if (baseAimPoint) {
+                shotDir = baseAimPoint.clone().sub(muzzle).normalize();
+            }
+
+            const spread = new THREE.Vector3(
+                (Math.random() - 0.5) * cfg.guns.spread,
+                (Math.random() - 0.5) * cfg.guns.spread,
+                (Math.random() - 0.5) * cfg.guns.spread,
+            );
+            shotDir.add(spread).normalize();
+
+            const bullet = new THREE.Mesh(
+                new THREE.SphereGeometry(0.25, 6, 6),
+                new THREE.MeshStandardMaterial({ color: 0xffe7a8, emissive: 0xffb02e, emissiveIntensity: 0.8 }),
+            );
+            bullet.position.copy(muzzle);
+            bullet.userData = {
+                vel: shotDir.multiplyScalar(cfg.guns.bulletSpeed).add(data.vel.clone()),
+                ttl: cfg.guns.ttl,
+                team: data.team,
+            };
+            entities.bullets.push(bullet);
+            scene.add(bullet);
         }
-
-        const spread = new THREE.Vector3(
-            (Math.random() - 0.5) * cfg.guns.spread,
-            (Math.random() - 0.5) * cfg.guns.spread,
-            (Math.random() - 0.5) * cfg.guns.spread,
-        );
-        shotDir.add(spread).normalize();
-
-        const bullet = new THREE.Mesh(
-            new THREE.SphereGeometry(0.25, 6, 6),
-            new THREE.MeshStandardMaterial({ color: 0xffe7a8, emissive: 0xffb02e, emissiveIntensity: 0.8 }),
-        );
-        bullet.position.copy(muzzle);
-        bullet.userData = {
-            vel: shotDir.multiplyScalar(cfg.guns.bulletSpeed).add(data.vel.clone()),
-            ttl: cfg.guns.ttl,
-            team: data.team,
-        };
-        entities.bullets.push(bullet);
-        scene.add(bullet);
     }
 
     function spawnRocket(fromPlane) {
@@ -217,11 +226,20 @@ export function createCombatSystem({
         soundEffects.playBombDrop(1);
 
         const forward = forwardOf(fromPlane);
+        const bombIndex = data.bombs;
+        const bombMesh = fromPlane.userData.controls?.bombMeshes?.[bombIndex];
+        const bombWorldPos = new THREE.Vector3();
+        if (bombMesh) {
+            bombMesh.getWorldPosition(bombWorldPos);
+        } else {
+            bombWorldPos.copy(fromPlane.position).add(forward.clone().multiplyScalar(cfg.bombs.dropOffset)).add(new THREE.Vector3(0, -0.8, 0));
+        }
+
         const bomb = new THREE.Mesh(
             new THREE.IcosahedronGeometry(0.33, 0),
             new THREE.MeshStandardMaterial({ color: 0x48525d, emissive: 0x24180d, emissiveIntensity: 0.15, flatShading: true }),
         );
-        bomb.position.copy(fromPlane.position).add(forward.clone().multiplyScalar(cfg.bombs.dropOffset)).add(new THREE.Vector3(0, -0.8, 0));
+        bomb.position.copy(bombWorldPos);
         bomb.userData = {
             vel: data.vel.clone(),
             ttl: cfg.bombs.ttl,

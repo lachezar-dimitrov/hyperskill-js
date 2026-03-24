@@ -1,7 +1,20 @@
-// @ts-nocheck
-export function createInputController({ window, document, canvas, onInput, shouldStartDrag }) {
-    const keys = {};
-    const mouse = { dx: 0, dy: 0, locked: false, dragging: false, lastX: 0, lastY: 0, sens: 0.0015 };
+import type { InputController } from "../core/game-types.js";
+
+export function createInputController({
+    window,
+    document,
+    canvas,
+    onInput,
+    shouldStartDrag,
+}: {
+    window: Window;
+    document: Document;
+    canvas: HTMLCanvasElement;
+    onInput?: () => void;
+    shouldStartDrag?: (event: MouseEvent) => boolean;
+}): InputController {
+    const keys: Record<string, boolean> = {};
+    const mouse: InputController["mouse"] = { dx: 0, dy: 0, locked: false, dragging: false, lastX: 0, lastY: 0, sens: 0.0015 };
     const hasPointerLock = "pointerLockElement" in document;
 
     window.addEventListener("keydown", (e) => {
